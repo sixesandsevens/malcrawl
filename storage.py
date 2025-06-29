@@ -2,7 +2,11 @@ import sqlite3
 
 DB_PATH = "malcrawl.db"
 
+"""Utility functions for persisting crawl results to SQLite."""
+
 def log_crawl_result(url, num_links, num_images, num_videos, suspicious):
+    """Persist a single crawl result and its findings."""
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
@@ -15,3 +19,4 @@ def log_crawl_result(url, num_links, num_images, num_videos, suspicious):
 
     conn.commit()
     conn.close()
+

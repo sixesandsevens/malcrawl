@@ -1,3 +1,5 @@
+"""Default configuration values for the crawler."""
+
 DEFAULT_USER_AGENT = "MalCrawlBot/0.1"
 DEFAULT_DEPTH = 2
 TIMEOUT = 5

@@ -1,3 +1,5 @@
+"""CLI entry point for running MalCrawl from the command line."""
+
 import argparse
 from crawler import crawl
 from config import DEFAULT_DEPTH

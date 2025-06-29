@@ -1,6 +1,9 @@
+"""Functions for scanning HTML content for suspicious behavior."""
+
 import re
 
 def scan_page(soup, base_url):
+    """Analyze parsed HTML and return a list of suspicious findings."""
     print(f"[Scan] {base_url}")
 
     suspicious = []
@@ -27,3 +30,4 @@ def scan_page(soup, base_url):
         print(f"  ✅ No major red flags found.")
 
     return suspicious
+
