@@ -1,53 +1,43 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>MalCrawl Results</title>
-</head>
-<body>
-    <h1>Scan Results</h1>
-    <table border="1">
-        <tr>
-            <th>URL</th>
-            <th>Timestamp</th>
-            <th>Links</th>
-            <th>Images</th>
-            <th>Videos</th>
-            <th>Suspicious</th>
-        </tr>
-
-        {% set lookup_screenshots = namespace(files=[]) %}
-{% for f in lookup_screenshots.files.append(f) if f.endswith('.png') %}
-{% endfor %}
-{% set lookup_screenshots = lookup_screenshots.files %}
-
-
-        {% for r in results %}
-
-        {% set shotname = r.url.replace('http://', '').replace('https://', '').replace('/', '_').rstrip('_') + '.png' %}
-{% set screenshot_path = 'screenshots/' + shotname %}
-
-{% if shotname in lookup_screenshots %}
-    <td><img src="{{ url_for('serve_screenshot', filename=shotname) }}" width="300"></td>
-{% else %}
-    <td>No Screenshot</td>
-{% endif %}
-
-        <tr>
-            <td>{{ r.url }}</td>
-            <td>{{ r.timestamp }}</td>
-            <td>{{ r.links }}</td>
-            <td>{{ r.images }}</td>
-            <td>{{ r.videos }}</td>
-            <td>
-                {% if r.issues %}
-                    <ul>{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
-                {% else %}
-                    ✅ Clean
-                {% endif %}
-            </td>
-        </tr>
-        {% endfor %}
-    </table>
-    <p><a href="{{ url_for('index') }}">Back to Scanner</a></p>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-4">Scan Results for {{ domain }}</h2>
+<table class="table table-bordered">
+  <thead>
+    <tr>
+      <th>Screenshot</th>
+      <th>URL</th>
+      <th>Timestamp</th>
+      <th>Links</th>
+      <th>Images</th>
+      <th>Videos</th>
+      <th>Suspicious</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in results %}
+    <tr>
+      <td>
+        {% if r.screenshot %}
+          <img src="{{ url_for('serve_screenshot', filename=r.screenshot) }}" width="300">
+        {% else %}
+          No Screenshot
+        {% endif %}
+      </td>
+      <td>{{ r.url }}</td>
+      <td>{{ r.timestamp }}</td>
+      <td>{{ r.links }}</td>
+      <td>{{ r.images }}</td>
+      <td>{{ r.videos }}</td>
+      <td>
+        {% if r.issues %}
+          <ul>{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
+        {% else %}
+          ✅ Clean
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+<p><a href="{{ url_for('index') }}">Back to Scanner</a></p>
+{% endblock %}
