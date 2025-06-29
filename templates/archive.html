@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>MalCrawl Archive</title></head>
+<body>
+    <h1>Scan Archive</h1>
+    <ul>
+        {% for scan in scans %}
+        <li><a href="{{ url_for('view_result', crawl_id=scan[0]) }}">{{ scan[1] }}</a> — {{ scan[2] }}</li>
+        {% endfor %}
+    </ul>
+    <p><a href="{{ url_for('index') }}">Back to Scanner</a></p>
+</body>
+</html>

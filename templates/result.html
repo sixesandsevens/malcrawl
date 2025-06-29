@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+<head><title>MalCrawl Result</title></head>
+<body>
+    <h1>Scan Results for {{ result.url }}</h1>
+    <p>Scanned at: {{ result.timestamp }}</p>
+    <ul>
+        <li>🔗 Links: {{ result.links }}</li>
+        <li>🖼️ Images: {{ result.images }}</li>
+        <li>🎥 Videos: {{ result.videos }}</li>
+        <li>🚨 Suspicious Content:
+            {% if result.issues %}
+                <ul>{% for i in result.issues %}<li>{{ i }}</li>{% endfor %}</ul>
+            {% else %}
+                ✅ No issues found
+            {% endif %}
+        </li>
+    </ul>
+    <p><a href="{{ url_for('archive') }}">Back to Archive</a></p>
+</body>
+</html>

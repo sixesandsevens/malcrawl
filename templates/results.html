@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MalCrawl Results</title>
+</head>
+<body>
+    <h1>Scan Results for {{ domain }}</h1>
+    <table border="1">
+        <tr>
+            <th>URL</th>
+            <th>Timestamp</th>
+            <th>Links</th>
+            <th>Images</th>
+            <th>Videos</th>
+            <th>Suspicious</th>
+            <th>Screenshot</th>
+        </tr>
+
+        {% for r in results %}
+        <tr>
+            <td>{{ r.url }}</td>
+            <td>{{ r.timestamp }}</td>
+            <td>{{ r.links }}</td>
+            <td>{{ r.images }}</td>
+            <td>{{ r.videos }}</td>
+            <td>
+                {% if r.issues %}
+                    <ul>{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
+                {% else %}
+                    ✅ Clean
+                {% endif %}
+            </td>
+            <td>
+                {% set shotname = r.url.replace('http://', '').replace('https://', '').replace('/', '_').rstrip('_') + '.png' %}
+                {% if shotname in screenshots %}
+                    <img src="{{ url_for('serve_screenshot', filename=shotname) }}" width="300">
+                {% else %}
+                    No Screenshot
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </table>
+    <p><a href="{{ url_for('index') }}">⬅ Back to Scanner</a></p>
+</body>
+</html>
