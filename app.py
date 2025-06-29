@@ -178,10 +178,14 @@ def load_result(result_id):
             "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id = ?",
             (result_id,),
         )
-        scripts = [
-            {"original": o, "deobfuscated": d, "intent": i}
-            for o, d, i in cur.fetchall()
-        ]
+        scripts = []
+        for o, d, i in cur.fetchall():
+            scripts.append({
+                "original": o,
+                "deobfuscated": d,
+                "intent": i,
+                "changed": (d or "").strip() != (o or "").strip(),
+            })
     except sqlite3.OperationalError:
         scripts = []
 
@@ -233,10 +237,14 @@ def export_json(domain):
             "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
             (crawl_id,),
         )
-        scripts = [
-            {"original": o, "deobfuscated": d, "intent": i}
-            for o, d, i in cur.fetchall()
-        ]
+        scripts = []
+        for o, d, i in cur.fetchall():
+            scripts.append({
+                "original": o,
+                "deobfuscated": d,
+                "intent": i,
+                "changed": (d or "").strip() != (o or "").strip(),
+            })
         screenshot_name = sanitize_filename(url)
         screenshot_path = os.path.join("screenshots", screenshot_name)
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
