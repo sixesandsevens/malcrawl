@@ -61,11 +61,14 @@
 
     <main class="container my-4">
         <div id="progressContainer">
-            <label class="form-label">Scanning <span id="currentUrl"></span> - Page <span id="currentPage">0</span> of <span id="totalPages">0</span></label>
+            <label class="form-label">Scanning <span id="currentUrl"></span> - Page <span id="currentPage">0</span> of <span id="totalPages">0</span> (<span id="stage">queueing</span>)</label>
             <div class="progress">
                 <div id="scanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
             </div>
-            <button class="btn btn-sm btn-secondary mt-2" id="toggleLog">Toggle Logs</button>
+            <div class="mt-2">
+                <button class="btn btn-sm btn-secondary" id="toggleLog">Toggle Logs</button>
+                <button class="btn btn-sm btn-danger" id="stopScan">Stop Scan</button>
+            </div>
             <pre id="logConsole" class="bg-dark text-white p-2 mt-2 d-none" style="max-height:200px;overflow-y:auto"></pre>
         </div>
         {% block content %}{% endblock %}
@@ -84,6 +87,7 @@
             const totalSpan = document.getElementById('totalPages');
             const bar = document.querySelector('#scanProgressBar');
             const log = document.getElementById('logConsole');
+            const stageSpan = document.getElementById('stage');
             let poll;
 
             function fetchStatus() {
@@ -96,6 +100,9 @@
                         if (data.total > 0) {
                             const pct = Math.min(100, Math.round((data.current_index / data.total) * 100));
                             bar.style.width = pct + '%';
+                        }
+                        if (data.stage) {
+                            stageSpan.textContent = data.stage;
                         }
                         if (data.logs) {
                             log.textContent = data.logs.join('\n');
@@ -118,6 +125,13 @@
                         .then(() => {
                             poll = setInterval(fetchStatus, 1000);
                         });
+                });
+            }
+
+            const stopBtn = document.getElementById('stopScan');
+            if (stopBtn) {
+                stopBtn.addEventListener('click', () => {
+                    fetch('/stop_scan', { method: 'POST' });
                 });
             }
 

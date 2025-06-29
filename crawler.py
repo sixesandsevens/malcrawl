@@ -16,12 +16,19 @@ from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
 visited = set()
+_stop = False
 
 
 def reset_state():
     """Reset visited cache for a new crawl run."""
-    global visited
+    global visited, _stop
     visited = set()
+    _stop = False
+
+def stop_scan():
+    """Signal the crawler to stop as soon as possible."""
+    global _stop
+    _stop = True
 
 def detect_browser():
     if shutil.which("chromedriver"):
@@ -89,6 +96,11 @@ def crawl(
     include_screenshots=False,
     status=None,
 ):
+    if _stop:
+        if status is not None:
+            status.setdefault("logs", []).append("Scan stopped")
+            status["done"] = True
+        return
     if url in visited or depth == 0:
         return
     visited.add(url)
@@ -97,6 +109,7 @@ def crawl(
         status["current_url"] = url
         status["current_index"] += 1
         status.setdefault("logs", []).append(f"Scanning {url}")
+        status["stage"] = "fetching"
 
     if render_js and browser is None:
         browser = detect_browser()
@@ -108,6 +121,8 @@ def crawl(
 
     try:
         if render_js:
+            if status is not None:
+                status["stage"] = "rendering"
             screenshot_path = None
             if include_screenshots:
                 screenshot_name = sanitize_filename(url)
@@ -118,10 +133,14 @@ def crawl(
                     log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")
                 return
         else:
+            if status is not None:
+                status["stage"] = "fetching"
             response = requests.get(url, headers=headers, timeout=TIMEOUT)
             html = response.text
 
         soup = BeautifulSoup(html, 'html.parser')
+        if status is not None:
+            status["stage"] = "scanning"
     except Exception as e:
         print(f"[Error] Failed to fetch {url}: {e}")
         if status is not None:
@@ -161,3 +180,5 @@ def crawl(
                 include_screenshots,
                 status,
             )
+            if _stop:
+                break
