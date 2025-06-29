@@ -44,6 +44,13 @@
             font-size: 0.9rem;
             color: var(--bs-secondary-color);
         }
+        pre {
+            background-color: #1e1e1e;
+            color: #c9d1d9;
+            padding: 1em;
+            border-radius: 0.5em;
+            overflow-x: auto;
+        }
     </style>
 </head>
 <body>
@@ -52,7 +59,50 @@
     </header>
 
     <main class="container my-4">
-        {% block content %}{% endblock %}
+        {% if result %}
+            <h2>Scan Results for: {{ result.url }}</h2>
+            <p><strong>Date:</strong> {{ result.timestamp }}</p>
+            <p><strong>Links Found:</strong> {{ result.links }}</p>
+            <p><strong>Images Found:</strong> {{ result.images }}</p>
+            <p><strong>Videos Found:</strong> {{ result.videos }}</p>
+
+            <h4 class="mt-4">Suspicious Findings</h4>
+            {% if result.issues %}
+                <ul>
+                    {% for issue in result.issues %}
+                        <li class="suspicious">{{ issue }}</li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p class="clean">✅ No obvious malicious patterns found.</p>
+            {% endif %}
+
+            {% if result.deobfuscated_scripts %}
+                <h4 class="mt-4">Suspicious JavaScript</h4>
+                <div class="accordion" id="jsAccordion">
+                    {% for item in result.deobfuscated_scripts %}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading{{ loop.index }}">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
+                                Script {{ loop.index }} {% if item.intent %}- Suspected Intent: <em>{{ item.intent }}</em>{% endif %}
+                            </button>
+                        </h2>
+                        <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#jsAccordion">
+                            <div class="accordion-body">
+                                <strong>Original Code:</strong>
+                                <pre>{{ item.original }}</pre>
+                                <strong>Deobfuscated Code:</strong>
+                                <pre>{{ item.deobfuscated }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+        {% else %}
+            <p>No results to display.</p>
+        {% endif %}
     </main>
 
     <footer>
