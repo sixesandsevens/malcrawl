@@ -7,6 +7,7 @@ MalCrawl is a lightweight website crawler designed for forensic analysis. It col
 - SQLite logging of crawl results
 - Simple HTML interface and CLI
 - **Asynchronous JavaScript deobfuscation pipeline** detecting obfuscated code, attempting to decode it and inferring potential malicious intent
+- Interactive code viewer with syntax highlighted deobfuscated scripts and copy-to-clipboard buttons
 
 ## Usage
 ### Web Interface

@@ -2,21 +2,23 @@
 
 import re
 import asyncio
-from typing import List
+from typing import List, Tuple
 
 from deobfuscator import analyze_scripts
 
-def scan_page(soup, base_url):
-    """Analyze parsed HTML and return a list of suspicious findings."""
+def scan_page(soup, base_url) -> Tuple[List[str], List[dict]]:
+    """Analyze parsed HTML and return a list of suspicious findings and script details."""
     print(f"[Scan] {base_url}")
 
     suspicious: List[str] = []
 
     script_codes = [s.string or '' for s in soup.find_all('script')]
+    scripts_data: List[dict] = []
     if script_codes:
-        issues, beautified = asyncio.run(analyze_scripts(script_codes))
+        issues, scripts_data = asyncio.run(analyze_scripts(script_codes))
         suspicious.extend(issues)
-        for snippet in beautified:
+        for item in scripts_data:
+            snippet = item["deobfuscated"]
             if snippet.strip():
                 preview = snippet.strip().replace("\n", " ")[:80]
                 print(f"    JS Preview: {preview}")
@@ -37,5 +39,5 @@ def scan_page(soup, base_url):
     else:
         print(f"  ✅ No major red flags found.")
 
-    return suspicious
+    return suspicious, scripts_data
 

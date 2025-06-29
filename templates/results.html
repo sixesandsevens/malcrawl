@@ -37,6 +37,7 @@
         {% if r.screenshot %}
           <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" download class="btn btn-sm btn-secondary mt-2">Download</a>
         {% endif %}
+        <a href="{{ url_for('view_result', crawl_id=r.id) }}" class="btn btn-sm btn-primary mt-2">View Details</a>
         {% if r.status and 'error' in r.status %}
           <p class="text-warning mt-2">{{ r.status }}</p>
         {% endif %}
