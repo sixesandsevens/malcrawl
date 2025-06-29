@@ -26,7 +26,7 @@ def scan_page(soup, base_url) -> Tuple[List[str], List[dict]]:
     for tag in soup.find_all(True):
         for attr in tag.attrs:
             if attr.startswith('on'):
-                suspicious.append(f"Inline JS event: {attr}")
+                suspicious.append(f"Inline JS event: <{tag.name}> - {attr}")
 
     for iframe in soup.find_all('iframe'):
         if 'display:none' in str(iframe.get('style', '')):
