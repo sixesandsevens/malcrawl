@@ -88,10 +88,11 @@
             {% endif %}
 
             {% if result.inline_events %}
-                <h4 class="mt-4">Inline JavaScript Events <span class="badge bg-warning text-dark">!</span></h4>
+                <h4 class="mt-4">Inline JavaScript Events</h4>
+                <p class="text-warning">{{ result.inline_events|length }} inline event handlers found (e.g., onclick, onload)</p>
                 <ul>
                     {% for evt in result.inline_events %}
-                        <li class="text-warning">{{ evt }}</li>
+                        <li><span class="badge bg-danger">{{ evt.event }}</span> in <code>&lt;{{ evt.tag }}&gt;</code></li>
                     {% endfor %}
                 </ul>
             {% endif %}
@@ -130,19 +131,11 @@
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="accordion" id="jsAccordion">
-                    <div class="accordion-item">
-                        <h2 class="accordion-header" id="heading0">
-                            <button class="accordion-button" type="button" disabled>
-                                {% if result.inline_events %}
-                                    No flagged &lt;script&gt; blocks. Inline JS events detected above.
-                                {% else %}
-                                    No suspicious scripts detected
-                                {% endif %}
-                            </button>
-                        </h2>
-                    </div>
-                </div>
+                {% if result.inline_events %}
+                    <p><em>No flagged <code>&lt;script&gt;</code> blocks, but inline JS events were detected above.</em></p>
+                {% else %}
+                    <p>No suspicious scripts detected.</p>
+                {% endif %}
             {% endif %}
 
         {% else %}

@@ -6,11 +6,12 @@ from typing import List, Tuple
 
 from deobfuscator import analyze_scripts
 
-def scan_page(soup, base_url) -> Tuple[List[str], List[dict]]:
-    """Analyze parsed HTML and return a list of suspicious findings and script details."""
+def scan_page(soup, base_url) -> Tuple[List[str], List[dict], List[dict]]:
+    """Analyze parsed HTML and return suspicious findings, script details and inline events."""
     print(f"[Scan] {base_url}")
 
     suspicious: List[str] = []
+    inline_events: List[dict] = []
 
     script_codes = [s.string or '' for s in soup.find_all('script')]
     scripts_data: List[dict] = []
@@ -27,6 +28,7 @@ def scan_page(soup, base_url) -> Tuple[List[str], List[dict]]:
         for attr in tag.attrs:
             if attr.startswith('on'):
                 suspicious.append(f"Inline JS event: <{tag.name}> - {attr}")
+                inline_events.append({"event": attr, "tag": tag.name})
 
     for iframe in soup.find_all('iframe'):
         if 'display:none' in str(iframe.get('style', '')):
@@ -39,5 +41,5 @@ def scan_page(soup, base_url) -> Tuple[List[str], List[dict]]:
     else:
         print(f"  ✅ No major red flags found.")
 
-    return suspicious, scripts_data
+    return suspicious, scripts_data, inline_events
 

@@ -171,11 +171,16 @@ def load_result(result_id):
         "SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?",
         (result_id,),
     )
-    issues = [r[0] for r in cur.fetchall()]
+    raw_issues = [r[0] for r in cur.fetchall()]
+    issues = []
     inline_events = []
-    for i in issues:
+    for i in raw_issues:
         if i.startswith("Inline JS event:"):
-            inline_events.append(i.split(":", 1)[1].strip())
+            m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
+            if m:
+                inline_events.append({"event": m.group(2), "tag": m.group(1)})
+        else:
+            issues.append(i)
 
     try:
         cur.execute(
@@ -237,11 +242,16 @@ def export_json(domain):
     for row in crawl_data:
         crawl_id, url, timestamp, links, images, videos, status = row
         cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?", (crawl_id,))
-        issues = [r[0] for r in cur.fetchall()]
+        raw_issues = [r[0] for r in cur.fetchall()]
+        issues = []
         inline_events = []
-        for i in issues:
+        for i in raw_issues:
             if i.startswith("Inline JS event:"):
-                inline_events.append(i.split(":", 1)[1].strip())
+                m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
+                if m:
+                    inline_events.append({"event": m.group(2), "tag": m.group(1)})
+            else:
+                issues.append(i)
         cur.execute(
             "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
             (crawl_id,),
