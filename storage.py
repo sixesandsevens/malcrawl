@@ -68,3 +68,4 @@ def log_crawl_result(
 
     conn.commit()
     conn.close()
+    return crawl_id

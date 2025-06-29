@@ -154,43 +154,66 @@ def site_results(domain):
     return render_template("results.html", results=results, domain=domain, year=datetime.datetime.now().year)
 
 
-@app.route("/result/<int:crawl_id>")
-def view_result(crawl_id):
-    """Display full details for a single crawl entry."""
+def load_result(result_id):
     conn = sqlite3.connect("malcrawl.db")
+    conn.row_factory = sqlite3.Row
     cur = conn.cursor()
     cur.execute(
-        "SELECT url, timestamp, num_links, num_images, num_videos, status FROM crawl_results WHERE id=?",
-        (crawl_id,),
+        "SELECT * FROM crawl_results WHERE id = ?",
+        (result_id,),
     )
     row = cur.fetchone()
     if not row:
         conn.close()
-        return "Not found", 404
+        return None
 
-    url, timestamp, links, images, videos, status = row
-    cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id=?", (crawl_id,))
-    issues = [r[0] for r in cur.fetchall()]
     cur.execute(
-        "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
-        (crawl_id,),
+        "SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?",
+        (result_id,),
     )
-    scripts = [
-        {"original": o, "deobfuscated": d, "intent": i}
-        for o, d, i in cur.fetchall()
-    ]
+    issues = [r[0] for r in cur.fetchall()]
+
+    try:
+        cur.execute(
+            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id = ?",
+            (result_id,),
+        )
+        scripts = [
+            {"original": o, "deobfuscated": d, "intent": i}
+            for o, d, i in cur.fetchall()
+        ]
+    except sqlite3.OperationalError:
+        scripts = []
+
     conn.close()
-    result = {
-        "url": url,
-        "timestamp": timestamp,
-        "links": links,
-        "images": images,
-        "videos": videos,
+
+    return {
+        "id": row["id"],
+        "url": row["url"],
+        "timestamp": row["timestamp"],
+        "links": row["num_links"],
+        "images": row["num_images"],
+        "videos": row["num_videos"],
         "issues": issues,
         "deobfuscated_scripts": scripts,
-        "status": status,
+        "status": row["status"],
     }
-    return render_template("result.html", result=result, year=datetime.datetime.now().year)
+
+
+@app.route("/result/<result_id>")
+def view_result(result_id):
+    """Display full details for a single crawl entry."""
+    result = load_result(result_id)
+    if result:
+        domain = urlparse(result["url"]).netloc
+        return render_template(
+            "result.html",
+            result=result,
+            domain=domain,
+            year=datetime.datetime.now().year,
+        )
+    else:
+        return "Scan not found", 404
 
 
 @app.route("/export/<path:domain>.json")
