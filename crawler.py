@@ -155,7 +155,7 @@ def crawl(
     sources = [s['src'] for s in soup.find_all('source', src=True)]
     total_videos = len(videos) + len(sources)
 
-    suspicious, scripts = scan_page(soup, url)
+    suspicious, scripts, inline_events = scan_page(soup, url)
 
     if status is not None:
         if suspicious:
