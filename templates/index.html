@@ -1,35 +1,35 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>MalCrawl Submission</title>
-</head>
-<body>
-    <h1>Submit a URL to Scan</h1>
-    <form method="post">
-        <label>Target URL:</label>
-        <input type="text" name="url" required><br><br>
-
-        <label>Depth:</label>
-        <input type="number" name="depth" min="1" max="5" value="2"><br><br>
-
-        <label>User-Agent:</label>
-        <select name="user_agent">
-            {% for ua in user_agents %}
-            <option value="{{ ua }}">{{ ua }}</option>
-            {% endfor %}
-        </select><br><br>
-
-        <label>Enable JS Rendering (Selenium):</label>
-        <input type="checkbox" name="render_js"><br><br>
-
-        <label>Output Format:</label>
-        <select name="output_format">
-            {% for fmt in output_formats %}
-            <option value="{{ fmt }}">{{ fmt|upper }}</option>
-            {% endfor %}
-        </select><br><br>
-
-        <button type="submit">Run Scan</button>
-    </form>
-</body>
-</html>
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-4">Submit a URL to Scan</h2>
+<form method="post" class="vstack gap-3">
+  <div>
+    <label class="form-label">Target URL:</label>
+    <input type="text" name="url" class="form-control" required>
+  </div>
+  <div>
+    <label class="form-label">Depth:</label>
+    <input type="number" name="depth" min="1" max="5" value="2" class="form-control">
+  </div>
+  <div>
+    <label class="form-label">User-Agent:</label>
+    <select name="user_agent" class="form-select">
+      {% for ua in user_agents %}
+      <option value="{{ ua }}">{{ ua }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" name="render_js" id="render_js">
+    <label class="form-check-label" for="render_js">Enable JS Rendering (Selenium)</label>
+  </div>
+  <div>
+    <label class="form-label">Output Format:</label>
+    <select name="output_format" class="form-select">
+      {% for fmt in output_formats %}
+      <option value="{{ fmt }}">{{ fmt|upper }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="btn btn-primary">Run Scan</button>
+</form>
+{% endblock %}
