@@ -60,27 +60,36 @@ def infer_intent(code: str) -> List[str]:
     return intents
 
 
-async def analyze_script(js_code: str) -> Tuple[List[str], str]:
+async def analyze_script(js_code: str) -> Tuple[List[str], str, List[str]]:
     """Full pipeline for a single script: detect, deobfuscate, infer intent."""
     findings: List[str] = []
     beautified = js_code
+    intents: List[str] = []
 
     if detect_obfuscation(js_code):
         findings.append("obfuscated JavaScript")
         beautified = deobfuscate(js_code)
-        intents = infer_intent(beautified)
-        for intent in intents:
-            findings.append(f"intent:{intent}")
-    return findings, beautified
+
+    intents = infer_intent(beautified)
+    for intent in intents:
+        findings.append(f"intent:{intent}")
+
+    return findings, beautified, intents
 
 
-async def analyze_scripts(scripts: List[str]) -> Tuple[List[str], List[str]]:
+async def analyze_scripts(scripts: List[str]) -> Tuple[List[str], List[dict]]:
     """Analyze multiple scripts concurrently."""
     tasks = [analyze_script(code) for code in scripts]
     results = await asyncio.gather(*tasks)
     findings: List[str] = []
-    beautified: List[str] = []
-    for f, b in results:
+    processed: List[dict] = []
+    for (f, b, intents), orig in zip(results, scripts):
         findings.extend(f)
-        beautified.append(b)
-    return findings, beautified
+        processed.append(
+            {
+                "original": orig,
+                "deobfuscated": b,
+                "intent": ", ".join(intents) if intents else None,
+            }
+        )
+    return findings, processed

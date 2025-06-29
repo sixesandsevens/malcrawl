@@ -139,6 +139,7 @@ def site_results(domain):
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
 
         results.append({
+            "id": crawl_id,
             "url": url,
             "timestamp": timestamp,
             "links": links,
@@ -151,6 +152,45 @@ def site_results(domain):
 
     conn.close()
     return render_template("results.html", results=results, domain=domain, year=datetime.datetime.now().year)
+
+
+@app.route("/result/<int:crawl_id>")
+def view_result(crawl_id):
+    """Display full details for a single crawl entry."""
+    conn = sqlite3.connect("malcrawl.db")
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT url, timestamp, num_links, num_images, num_videos, status FROM crawl_results WHERE id=?",
+        (crawl_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return "Not found", 404
+
+    url, timestamp, links, images, videos, status = row
+    cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id=?", (crawl_id,))
+    issues = [r[0] for r in cur.fetchall()]
+    cur.execute(
+        "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
+        (crawl_id,),
+    )
+    scripts = [
+        {"original": o, "deobfuscated": d, "intent": i}
+        for o, d, i in cur.fetchall()
+    ]
+    conn.close()
+    result = {
+        "url": url,
+        "timestamp": timestamp,
+        "links": links,
+        "images": images,
+        "videos": videos,
+        "issues": issues,
+        "deobfuscated_scripts": scripts,
+        "status": status,
+    }
+    return render_template("result.html", result=result, year=datetime.datetime.now().year)
 
 
 @app.route("/export/<path:domain>.json")
@@ -166,16 +206,26 @@ def export_json(domain):
         crawl_id, url, timestamp, links, images, videos, status = row
         cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?", (crawl_id,))
         issues = [r[0] for r in cur.fetchall()]
+        cur.execute(
+            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        scripts = [
+            {"original": o, "deobfuscated": d, "intent": i}
+            for o, d, i in cur.fetchall()
+        ]
         screenshot_name = sanitize_filename(url)
         screenshot_path = os.path.join("screenshots", screenshot_name)
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
         results.append({
+            "id": crawl_id,
             "url": url,
             "timestamp": timestamp,
             "links": links,
             "images": images,
             "videos": videos,
             "issues": issues,
+            "deobfuscated_scripts": scripts,
             "screenshot": screenshot,
             "status": status,
         })
