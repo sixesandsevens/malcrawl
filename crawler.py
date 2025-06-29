@@ -1,3 +1,5 @@
+"""Core crawling logic for MalCrawl."""
+
 import os
 import shutil
 import requests
@@ -11,30 +13,52 @@ from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
+from selenium.webdriver.chrome.service import Service as ChromeService
+from webdriver_manager.firefox import GeckoDriverManager
+from webdriver_manager.chrome import ChromeDriverManager
 
+# Keep track of URLs that have been crawled to avoid loops
 visited = set()
 
 def detect_browser():
+    """Return the browser to use for Selenium based on environment and binaries."""
+
+    # Prefer value from the MALCRAWL_BROWSER environment variable if provided
+    env_choice = os.getenv("MALCRAWL_BROWSER")
+    if env_choice in {"chrome", "firefox"}:
+        return env_choice
+
+    # Check if drivers are available in PATH
     if shutil.which("geckodriver"):
         return "firefox"
-    elif shutil.which("chromedriver"):
+    if shutil.which("chromedriver"):
         return "chrome"
-    else:
-        raise RuntimeError("No supported WebDriver found (install geckodriver or chromedriver)")
+
+    # Fallback to firefox, webdriver-manager will download the driver if needed
+    return "firefox"
 
 def get_driver(browser="firefox"):
+    """Create a Selenium WebDriver instance using webdriver-manager."""
+
     if browser == "chrome":
         options = ChromeOptions()
         options.headless = True
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        return webdriver.Chrome(options=options)
-    else:
-        options = FirefoxOptions()
-        options.headless = True
-        return webdriver.Firefox(options=options)
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        service = ChromeService(ChromeDriverManager().install())
+        return webdriver.Chrome(service=service, options=options)
+
+    # Default to Firefox
+    options = FirefoxOptions()
+    options.headless = True
+    service = FirefoxService(GeckoDriverManager().install())
+    return webdriver.Firefox(service=service, options=options)
 
 def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
+    """Render a page with Selenium and optionally capture a screenshot."""
+
+    driver = None
     try:
         driver = get_driver(browser)
         driver.get(url)
@@ -42,18 +66,25 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
             os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
             driver.save_screenshot(screenshot_path)
         html = driver.page_source
-        driver.quit()
         return html
     except WebDriverException as e:
         print(f"[Selenium Error] {e}")
         return None
+    finally:
+        if driver:
+            driver.quit()
 
 def sanitize_filename(url):
+    """Create a filesystem-friendly filename for the screenshot."""
+
     parsed = urlparse(url)
     filename = f"{parsed.netloc}{parsed.path}".replace("/", "_").strip("_")
-    return filename + ".png" if filename else "index.png"
+    return (filename + ".png") if filename else "index.png"
 
 def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_js=False, browser=None):
+    """Recursively crawl a URL collecting basic metrics."""
+
+    # Avoid processing the same URL multiple times
     if url in visited or depth == 0:
         return
     visited.add(url)
