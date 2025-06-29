@@ -17,6 +17,12 @@ from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
 visited = set()
 
+
+def reset_state():
+    """Reset visited cache for a new crawl run."""
+    global visited
+    visited = set()
+
 def detect_browser():
     if shutil.which("chromedriver"):
         return "chrome"
@@ -73,10 +79,24 @@ def sanitize_filename(url):
     filename = f"{parsed.netloc}{parsed.path}".replace("/", "_").strip("_")
     return filename + ".png" if filename else "index.png"
 
-def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_js=False, browser=None, include_screenshots=False):
+def crawl(
+    url,
+    depth=2,
+    use_sqlite=False,
+    user_agent=DEFAULT_USER_AGENT,
+    render_js=False,
+    browser=None,
+    include_screenshots=False,
+    status=None,
+):
     if url in visited or depth == 0:
         return
     visited.add(url)
+
+    if status is not None:
+        status["current_url"] = url
+        status["current_index"] += 1
+        status.setdefault("logs", []).append(f"Scanning {url}")
 
     if render_js and browser is None:
         browser = detect_browser()
@@ -104,6 +124,8 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
         soup = BeautifulSoup(html, 'html.parser')
     except Exception as e:
         print(f"[Error] Failed to fetch {url}: {e}")
+        if status is not None:
+            status.setdefault("logs", []).append(f"Error fetching {url}: {e}")
         if use_sqlite:
             log_crawl_result(url, 0, 0, 0, [], status=f"error: {e}")
         return
@@ -116,6 +138,12 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
 
     suspicious = scan_page(soup, url)
 
+    if status is not None:
+        if suspicious:
+            status.setdefault("logs", []).append(f"{url} - {len(suspicious)} findings")
+        else:
+            status.setdefault("logs", []).append(f"{url} - clean")
+
     if use_sqlite:
         log_crawl_result(url, len(links), len(images), total_videos, suspicious, status="success")
 
@@ -123,4 +151,13 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
         next_url = urljoin(url, a)
         parsed = urlparse(next_url)
         if parsed.scheme in ('http', 'https'):
-            crawl(next_url, depth - 1, use_sqlite, user_agent, render_js, browser, include_screenshots)
+            crawl(
+                next_url,
+                depth - 1,
+                use_sqlite,
+                user_agent,
+                render_js,
+                browser,
+                include_screenshots,
+                status,
+            )
