@@ -11,7 +11,6 @@
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 {% for r in results %}
   <div class="col">
-    <a href="{{ url_for('view_result', result_id=r.id) }}" class="text-decoration-none text-reset">
       <div class="card h-100 result-card {{ 'suspicious' if r.issues else 'clean' }}">
         {% if r.screenshot %}
           <img src="{{ url_for('serve_screenshot', filename=r.screenshot) }}" class="card-img-top" alt="Screenshot of {{ r.url }}">
@@ -36,13 +35,12 @@
           {% if r.screenshot %}
             <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" download class="btn btn-sm btn-secondary mt-2">Download</a>
           {% endif %}
-          <button class="btn btn-sm btn-primary mt-2">View Details</button>
+          <a href="{{ url_for('view_result', result_id=r.id) }}" class="btn btn-sm btn-primary mt-2">View Details</a>
           {% if r.status and 'error' in r.status %}
             <p class="text-warning mt-2">{{ r.status }}</p>
           {% endif %}
         </div>
       </div>
-    </a>
   </div>
 {% endfor %}
 </div>

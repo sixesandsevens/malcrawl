@@ -55,6 +55,8 @@
             padding: 1em;
             border-radius: 0.5em;
             overflow-x: auto;
+            overflow-y: auto;
+            max-height: 400px;
             position: relative;
         }
     </style>
@@ -85,15 +87,21 @@
                 <p class="clean">✅ No obvious malicious patterns found.</p>
             {% endif %}
 
+            <h4 class="mt-4">Suspicious JavaScript</h4>
             {% if result.deobfuscated_scripts %}
-                <h4 class="mt-4">Suspicious JavaScript</h4>
                 <input id="scriptSearch" type="search" class="form-control mb-3" placeholder="Search scripts...">
                 <div class="accordion" id="jsAccordion">
                     {% for item in result.deobfuscated_scripts %}
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="heading{{ loop.index }}">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="false" aria-controls="collapse{{ loop.index }}">
-                                Script {{ loop.index }} {% if item.intent %}- Suspected Intent: <em>{{ item.intent }}</em>{% endif %}
+                                Script {{ loop.index }}
+                                {% if item.changed %}
+                                    <span class="badge bg-success ms-2">deobfuscated</span>
+                                {% else %}
+                                    <span class="badge bg-secondary ms-2">unchanged</span>
+                                {% endif %}
+                                {% if item.intent %}- Suspected Intent: <em>{{ item.intent }}</em>{% endif %}
                             </button>
                         </h2>
                         <div id="collapse{{ loop.index }}" class="accordion-collapse collapse" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#jsAccordion">
@@ -104,16 +112,30 @@
                                 <strong class="mt-3 d-block">Deobfuscated Code:</strong>
                                 <pre id="deob{{ loop.index }}"><code class="language-javascript">{{ item.deobfuscated | highlight_bad }}</code></pre>
                                 <button class="btn btn-sm btn-secondary copy-btn" data-target="deob{{ loop.index }}">Copy</button>
+                                {% if not item.changed %}
+                                    <p class="text-warning mt-2">No changes made after deobfuscation.</p>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
                     {% endfor %}
+                </div>
+            {% else %}
+                <div class="accordion" id="jsAccordion">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="heading0">
+                            <button class="accordion-button" type="button" disabled>
+                                No suspicious scripts detected
+                            </button>
+                        </h2>
+                    </div>
                 </div>
             {% endif %}
 
         {% else %}
             <p>No results to display.</p>
         {% endif %}
+        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Overview</a></p>
     </main>
 
     <footer>
