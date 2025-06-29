@@ -2,10 +2,16 @@
 {% block content %}
 <h2 class="mb-4">Scan Results for {{ domain }}</h2>
 
+<ul class="nav nav-tabs mb-3" id="filterTabs">
+  <li class="nav-item"><a class="nav-link active" data-filter="all" href="#">All</a></li>
+  <li class="nav-item"><a class="nav-link" data-filter="suspicious" href="#">Suspicious</a></li>
+  <li class="nav-item"><a class="nav-link" data-filter="clean" href="#">Clean</a></li>
+</ul>
+
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 {% for r in results %}
   <div class="col">
-    <div class="card h-100">
+    <div class="card h-100 result-card {{ 'suspicious' if r.issues else 'clean' }}">
       {% if r.screenshot %}
         <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" target="_blank">
           <img src="{{ url_for('serve_screenshot', filename=r.screenshot) }}" class="card-img-top" alt="Screenshot of {{ r.url }}">
@@ -18,9 +24,13 @@
         <p class="card-text"><strong>Timestamp:</strong> {{ r.timestamp }}</p>
         <p class="card-text">Links: {{ r.links }} | Images: {{ r.images }} | Videos: {{ r.videos }}</p>
         {% if r.issues %}
+          <span class="badge bg-danger">Suspicious</span>
           <ul class="text-danger small mb-0">{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
         {% else %}
-          <p class="text-success mb-0">✅ Clean</p>
+          <span class="badge bg-success">Clean</span>
+        {% endif %}
+        {% if r.status and 'error' in r.status %}
+          <p class="text-warning mt-2">{{ r.status }}</p>
         {% endif %}
       </div>
     </div>
@@ -29,4 +39,22 @@
 </div>
 
 <p class="mt-4"><a href="{{ url_for('index') }}">Back to Scanner</a></p>
+<p><a href="{{ url_for('export_json', domain=domain) }}">Download JSON</a></p>
+<script>
+  document.querySelectorAll('#filterTabs a').forEach(tab => {
+    tab.addEventListener('click', e => {
+      e.preventDefault();
+      document.querySelectorAll('#filterTabs .nav-link').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const filter = tab.getAttribute('data-filter');
+      document.querySelectorAll('.result-card').forEach(card => {
+        if (filter === 'all' || card.classList.contains(filter)) {
+          card.parentElement.style.display = 'block';
+        } else {
+          card.parentElement.style.display = 'none';
+        }
+      });
+    });
+  });
+</script>
 {% endblock %}
