@@ -6,6 +6,7 @@ import os
 import datetime
 from threading import Thread
 from crawler import crawl, sanitize_filename, reset_state
+from crawler import stop_scan
 
 app = Flask(__name__)
 
@@ -17,6 +18,7 @@ SCAN_STATUS = {
     "logs": [],
     "done": True,
     "domain": "",
+    "stage": "idle",
 }
 
 
@@ -34,6 +36,7 @@ def run_crawl(url, depth, ua, render_js, include_shots):
     )
     SCAN_STATUS["total"] = SCAN_STATUS.get("current_index", 0)
     SCAN_STATUS["done"] = True
+    SCAN_STATUS["stage"] = "complete"
 
 
 @app.route("/start_scan", methods=["POST"])
@@ -59,6 +62,7 @@ def start_scan():
             "logs": [],
             "done": False,
             "domain": domain,
+            "stage": "queueing",
         }
     )
 
@@ -73,6 +77,13 @@ def start_scan():
 def scan_status():
     """Return current crawl status."""
     return jsonify(SCAN_STATUS)
+
+
+@app.route("/stop_scan", methods=["POST"])
+def stop_scan_route():
+    """Endpoint to stop an in-progress scan."""
+    stop_scan()
+    return jsonify({"status": "stopping"})
 
 @app.route('/screenshots/<filename>')
 def serve_screenshot(filename):
