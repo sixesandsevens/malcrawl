@@ -139,6 +139,7 @@ def site_results(domain):
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
 
         results.append({
+            "id": crawl_id,
             "url": url,
             "timestamp": timestamp,
             "links": links,
@@ -151,6 +152,68 @@ def site_results(domain):
 
     conn.close()
     return render_template("results.html", results=results, domain=domain, year=datetime.datetime.now().year)
+
+
+def load_result(result_id):
+    conn = sqlite3.connect("malcrawl.db")
+    conn.row_factory = sqlite3.Row
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM crawl_results WHERE id = ?",
+        (result_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+
+    cur.execute(
+        "SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?",
+        (result_id,),
+    )
+    issues = [r[0] for r in cur.fetchall()]
+
+    try:
+        cur.execute(
+            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id = ?",
+            (result_id,),
+        )
+        scripts = [
+            {"original": o, "deobfuscated": d, "intent": i}
+            for o, d, i in cur.fetchall()
+        ]
+    except sqlite3.OperationalError:
+        scripts = []
+
+    conn.close()
+
+    return {
+        "id": row["id"],
+        "url": row["url"],
+        "timestamp": row["timestamp"],
+        "links": row["num_links"],
+        "images": row["num_images"],
+        "videos": row["num_videos"],
+        "issues": issues,
+        "deobfuscated_scripts": scripts,
+        "status": row["status"],
+    }
+
+
+@app.route("/result/<result_id>")
+def view_result(result_id):
+    """Display full details for a single crawl entry."""
+    result = load_result(result_id)
+    if result:
+        domain = urlparse(result["url"]).netloc
+        return render_template(
+            "result.html",
+            result=result,
+            domain=domain,
+            year=datetime.datetime.now().year,
+        )
+    else:
+        return "Scan not found", 404
 
 
 @app.route("/export/<path:domain>.json")
@@ -166,16 +229,26 @@ def export_json(domain):
         crawl_id, url, timestamp, links, images, videos, status = row
         cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?", (crawl_id,))
         issues = [r[0] for r in cur.fetchall()]
+        cur.execute(
+            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        scripts = [
+            {"original": o, "deobfuscated": d, "intent": i}
+            for o, d, i in cur.fetchall()
+        ]
         screenshot_name = sanitize_filename(url)
         screenshot_path = os.path.join("screenshots", screenshot_name)
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
         results.append({
+            "id": crawl_id,
             "url": url,
             "timestamp": timestamp,
             "links": links,
             "images": images,
             "videos": videos,
             "issues": issues,
+            "deobfuscated_scripts": scripts,
             "screenshot": screenshot,
             "status": status,
         })

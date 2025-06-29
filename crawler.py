@@ -155,7 +155,7 @@ def crawl(
     sources = [s['src'] for s in soup.find_all('source', src=True)]
     total_videos = len(videos) + len(sources)
 
-    suspicious = scan_page(soup, url)
+    suspicious, scripts = scan_page(soup, url)
 
     if status is not None:
         if suspicious:
@@ -164,7 +164,17 @@ def crawl(
             status.setdefault("logs", []).append(f"{url} - clean")
 
     if use_sqlite:
-        log_crawl_result(url, len(links), len(images), total_videos, suspicious, status="success")
+        crawl_id = log_crawl_result(
+            url,
+            len(links),
+            len(images),
+            total_videos,
+            suspicious,
+            scripts=scripts,
+            status="success",
+        )
+        if status is not None:
+            status.setdefault("logs", []).append(f"Stored result {crawl_id}")
 
     for a in links:
         next_url = urljoin(url, a)
