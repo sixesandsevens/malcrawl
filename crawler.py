@@ -73,7 +73,7 @@ def sanitize_filename(url):
     filename = f"{parsed.netloc}{parsed.path}".replace("/", "_").strip("_")
     return filename + ".png" if filename else "index.png"
 
-def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_js=False, browser=None):
+def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_js=False, browser=None, include_screenshots=False):
     if url in visited or depth == 0:
         return
     visited.add(url)
@@ -88,10 +88,14 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
 
     try:
         if render_js:
-            screenshot_name = sanitize_filename(url)
-            screenshot_path = os.path.join("screenshots", screenshot_name)
+            screenshot_path = None
+            if include_screenshots:
+                screenshot_name = sanitize_filename(url)
+                screenshot_path = os.path.join("screenshots", screenshot_name)
             html = fetch_with_selenium(url, screenshot_path, browser=browser)
             if html is None:
+                if use_sqlite:
+                    log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")
                 return
         else:
             response = requests.get(url, headers=headers, timeout=TIMEOUT)
@@ -100,6 +104,8 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
         soup = BeautifulSoup(html, 'html.parser')
     except Exception as e:
         print(f"[Error] Failed to fetch {url}: {e}")
+        if use_sqlite:
+            log_crawl_result(url, 0, 0, 0, [], status=f"error: {e}")
         return
 
     links = [a['href'] for a in soup.find_all('a', href=True)]
@@ -111,10 +117,10 @@ def crawl(url, depth=2, use_sqlite=False, user_agent=DEFAULT_USER_AGENT, render_
     suspicious = scan_page(soup, url)
 
     if use_sqlite:
-        log_crawl_result(url, len(links), len(images), total_videos, suspicious)
+        log_crawl_result(url, len(links), len(images), total_videos, suspicious, status="success")
 
     for a in links:
         next_url = urljoin(url, a)
         parsed = urlparse(next_url)
         if parsed.scheme in ('http', 'https'):
-            crawl(next_url, depth - 1, use_sqlite, user_agent, render_js, browser)
+            crawl(next_url, depth - 1, use_sqlite, user_agent, render_js, browser, include_screenshots)
