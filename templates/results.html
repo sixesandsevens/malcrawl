@@ -11,38 +11,38 @@
 <div class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
 {% for r in results %}
   <div class="col">
-    <div class="card h-100 result-card {{ 'suspicious' if r.issues else 'clean' }}">
-      {% if r.screenshot %}
-        <a href="#" data-bs-toggle="modal" data-bs-target="#imgModal" data-img="{{ url_for('serve_screenshot', filename=r.screenshot) }}">
-          <img src="{{ url_for('serve_screenshot', filename=r.screenshot) }}" class="card-img-top" alt="Screenshot of {{ r.url }}">
-        </a>
-      {% else %}
-        <div class="card-img-top p-3 text-center">No Screenshot</div>
-      {% endif %}
-      <div class="card-body">
-        <h5 class="card-title">{{ r.url }}</h5>
-        <p class="card-text"><strong>Timestamp:</strong> {{ r.timestamp }}</p>
-        <p class="card-text">Links: {{ r.links }} | Images: {{ r.images }} | Videos: {{ r.videos }}</p>
-        {% set count = r.issues|length %}
-        {% if count == 0 %}
-          <span class="badge bg-success">🟢 Clean</span>
-        {% elif count < 3 %}
-          <span class="badge bg-warning text-dark">🟡 Mild</span>
-        {% else %}
-          <span class="badge bg-danger">🔴 Suspicious</span>
-        {% endif %}
-        {% if count > 0 %}
-          <ul class="text-danger small mb-0">{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
-        {% endif %}
+    <a href="{{ url_for('view_result', result_id=r.id) }}" class="text-decoration-none text-reset">
+      <div class="card h-100 result-card {{ 'suspicious' if r.issues else 'clean' }}">
         {% if r.screenshot %}
-          <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" download class="btn btn-sm btn-secondary mt-2">Download</a>
+          <img src="{{ url_for('serve_screenshot', filename=r.screenshot) }}" class="card-img-top" alt="Screenshot of {{ r.url }}">
+        {% else %}
+          <div class="card-img-top p-3 text-center">No Screenshot</div>
         {% endif %}
-        <a href="{{ url_for('view_result', crawl_id=r.id) }}" class="btn btn-sm btn-primary mt-2">View Details</a>
-        {% if r.status and 'error' in r.status %}
-          <p class="text-warning mt-2">{{ r.status }}</p>
-        {% endif %}
+        <div class="card-body">
+          <h5 class="card-title">{{ r.url }}</h5>
+          <p class="card-text"><strong>Timestamp:</strong> {{ r.timestamp }}</p>
+          <p class="card-text">Links: {{ r.links }} | Images: {{ r.images }} | Videos: {{ r.videos }}</p>
+          {% set count = r.issues|length %}
+          {% if count == 0 %}
+            <span class="badge bg-success">🟢 Clean</span>
+          {% elif count < 3 %}
+            <span class="badge bg-warning text-dark">🟡 Mild</span>
+          {% else %}
+            <span class="badge bg-danger">🔴 Suspicious</span>
+          {% endif %}
+          {% if count > 0 %}
+            <ul class="text-danger small mb-0">{% for i in r.issues %}<li>{{ i }}</li>{% endfor %}</ul>
+          {% endif %}
+          {% if r.screenshot %}
+            <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" download class="btn btn-sm btn-secondary mt-2">Download</a>
+          {% endif %}
+          <button class="btn btn-sm btn-primary mt-2">View Details</button>
+          {% if r.status and 'error' in r.status %}
+            <p class="text-warning mt-2">{{ r.status }}</p>
+          {% endif %}
+        </div>
       </div>
-    </div>
+    </a>
   </div>
 {% endfor %}
 </div>

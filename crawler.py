@@ -164,7 +164,7 @@ def crawl(
             status.setdefault("logs", []).append(f"{url} - clean")
 
     if use_sqlite:
-        log_crawl_result(
+        crawl_id = log_crawl_result(
             url,
             len(links),
             len(images),
@@ -173,6 +173,8 @@ def crawl(
             scripts=scripts,
             status="success",
         )
+        if status is not None:
+            status.setdefault("logs", []).append(f"Stored result {crawl_id}")
 
     for a in links:
         next_url = urljoin(url, a)

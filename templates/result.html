@@ -67,6 +67,7 @@
 
     <main class="container my-4">
         {% if result %}
+            <a href="{{ url_for('site_results', domain=domain) }}" class="btn btn-secondary mb-3">&larr; Back to Overview</a>
             <h2>Scan Results for: {{ result.url }}</h2>
             <p><strong>Date:</strong> {{ result.timestamp }}</p>
             <p><strong>Links Found:</strong> {{ result.links }}</p>
