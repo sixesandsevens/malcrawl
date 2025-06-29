@@ -1,5 +1,7 @@
 from flask import send_from_directory
 from flask import Flask, render_template, request, redirect, url_for, jsonify
+from markupsafe import Markup, escape
+import re
 import sqlite3
 from urllib.parse import urlparse
 import os
@@ -9,6 +11,18 @@ from crawler import crawl, sanitize_filename, reset_state
 from crawler import stop_scan
 
 app = Flask(__name__)
+
+# Highlight suspicious JavaScript keywords
+BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
+
+
+def highlight_bad(code: str) -> Markup:
+    """Return HTML with risky JS functions emphasized."""
+    escaped = escape(code)
+    highlighted = BAD_JS_RE.sub(lambda m: f'<span class="text-danger fw-bold">{m.group(0)}</span>', escaped)
+    return Markup(highlighted)
+
+app.add_template_filter(highlight_bad, "highlight_bad")
 
 # Simple dictionary to expose crawl progress
 SCAN_STATUS = {
