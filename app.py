@@ -1,10 +1,15 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory
+from flask import send_from_directory
+from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
-import os
 from urllib.parse import urlparse
 from crawler import crawl
 
 app = Flask(__name__)
+
+@app.route('/screenshots/<filename>')
+def serve_screenshot(filename):
+    return send_from_directory('screenshots', filename)
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -52,13 +57,7 @@ def site_results(domain):
         })
 
     conn.close()
-
-    screenshot_files = set(os.listdir('screenshots')) if os.path.exists('screenshots') else set()
-    return render_template("results.html", results=results, domain=domain, screenshots=screenshot_files)
-
-@app.route('/screenshots/<filename>')
-def serve_screenshot(filename):
-    return send_from_directory('screenshots', filename)
+    return render_template("results.html", results=results, domain=domain)
 
 if __name__ == "__main__":
     app.run(debug=True)

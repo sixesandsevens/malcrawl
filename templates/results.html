@@ -4,7 +4,7 @@
     <title>MalCrawl Results</title>
 </head>
 <body>
-    <h1>Scan Results for {{ domain }}</h1>
+    <h1>Scan Results</h1>
     <table border="1">
         <tr>
             <th>URL</th>
@@ -13,10 +13,25 @@
             <th>Images</th>
             <th>Videos</th>
             <th>Suspicious</th>
-            <th>Screenshot</th>
         </tr>
 
+        {% set lookup_screenshots = namespace(files=[]) %}
+{% for f in lookup_screenshots.files.append(f) if f.endswith('.png') %}
+{% endfor %}
+{% set lookup_screenshots = lookup_screenshots.files %}
+
+
         {% for r in results %}
+
+        {% set shotname = r.url.replace('http://', '').replace('https://', '').replace('/', '_').rstrip('_') + '.png' %}
+{% set screenshot_path = 'screenshots/' + shotname %}
+
+{% if shotname in lookup_screenshots %}
+    <td><img src="{{ url_for('serve_screenshot', filename=shotname) }}" width="300"></td>
+{% else %}
+    <td>No Screenshot</td>
+{% endif %}
+
         <tr>
             <td>{{ r.url }}</td>
             <td>{{ r.timestamp }}</td>
@@ -30,17 +45,9 @@
                     ✅ Clean
                 {% endif %}
             </td>
-            <td>
-                {% set shotname = r.url.replace('http://', '').replace('https://', '').replace('/', '_').rstrip('_') + '.png' %}
-                {% if shotname in screenshots %}
-                    <img src="{{ url_for('serve_screenshot', filename=shotname) }}" width="300">
-                {% else %}
-                    No Screenshot
-                {% endif %}
-            </td>
         </tr>
         {% endfor %}
     </table>
-    <p><a href="{{ url_for('index') }}">⬅ Back to Scanner</a></p>
+    <p><a href="{{ url_for('index') }}">Back to Scanner</a></p>
 </body>
 </html>
