@@ -4,18 +4,84 @@ import sqlite3
 from urllib.parse import urlparse
 import os
 import datetime
-from crawler import crawl, sanitize_filename
+from threading import Thread
+from crawler import crawl, sanitize_filename, reset_state
 
 app = Flask(__name__)
+
+# Simple dictionary to expose crawl progress
+SCAN_STATUS = {
+    "current_url": "",
+    "current_index": 0,
+    "total": 0,
+    "logs": [],
+    "done": True,
+    "domain": "",
+}
+
+
+def run_crawl(url, depth, ua, render_js, include_shots):
+    """Background thread entry for crawl"""
+    reset_state()
+    crawl(
+        url,
+        depth=depth,
+        use_sqlite=True,
+        user_agent=ua,
+        render_js=render_js,
+        include_screenshots=include_shots,
+        status=SCAN_STATUS,
+    )
+    SCAN_STATUS["total"] = SCAN_STATUS.get("current_index", 0)
+    SCAN_STATUS["done"] = True
+
+
+@app.route("/start_scan", methods=["POST"])
+def start_scan():
+    """API endpoint to kick off a crawl asynchronously."""
+    url = request.form.get("url")
+    depth = int(request.form.get("depth", 2))
+    ua = request.form.get("user_agent")
+    render_js = request.form.get("render_js") == "on"
+    include_shots = request.form.get("include_shots") == "on"
+
+    if not url:
+        return jsonify({"error": "URL required"}), 400
+
+    domain = urlparse(url).netloc
+
+    # reset status
+    SCAN_STATUS.update(
+        {
+            "current_url": "",
+            "current_index": 0,
+            "total": 0,
+            "logs": [],
+            "done": False,
+            "domain": domain,
+        }
+    )
+
+    thread = Thread(target=run_crawl, args=(url, depth, ua, render_js, include_shots))
+    thread.daemon = True
+    thread.start()
+
+    return jsonify({"status": "started"})
+
+
+@app.route("/scan-status")
+def scan_status():
+    """Return current crawl status."""
+    return jsonify(SCAN_STATUS)
 
 @app.route('/screenshots/<filename>')
 def serve_screenshot(filename):
     return send_from_directory('screenshots', filename)
 
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET"])
 def index():
-    """Render the main form and handle submissions."""
+    """Render the main form."""
     user_agents = [
         "MalCrawlBot/0.1",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/113.0.0.0",
@@ -23,19 +89,6 @@ def index():
         "curl/7.68.0"
     ]
     output_formats = ["html", "json", "zip"]
-
-    if request.method == "POST":
-        url = request.form.get("url")
-        depth = int(request.form.get("depth", 2))
-        ua = request.form.get("user_agent")
-        render_js = request.form.get("render_js") == "on"
-        include_shots = request.form.get("include_shots") == "on"
-        out_format = request.form.get("output_format")
-
-        if url:
-            crawl(url, depth=depth, use_sqlite=True, user_agent=ua, render_js=render_js, include_screenshots=include_shots)
-            domain = urlparse(url).netloc
-            return redirect(url_for("site_results", domain=domain))
 
     return render_template("index.html", user_agents=user_agents, output_formats=output_formats, year=datetime.datetime.now().year)
 
