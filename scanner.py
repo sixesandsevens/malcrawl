@@ -1,17 +1,25 @@
 """Functions for scanning HTML content for suspicious behavior."""
 
 import re
+import asyncio
+from typing import List
+
+from deobfuscator import analyze_scripts
 
 def scan_page(soup, base_url):
     """Analyze parsed HTML and return a list of suspicious findings."""
     print(f"[Scan] {base_url}")
 
-    suspicious = []
+    suspicious: List[str] = []
 
-    for script in soup.find_all('script'):
-        code = script.string or ''
-        if 'eval(' in code or 'unescape(' in code or re.search(r'[a-zA-Z]{20,}', code):
-            suspicious.append("Obfuscated JavaScript")
+    script_codes = [s.string or '' for s in soup.find_all('script')]
+    if script_codes:
+        issues, beautified = asyncio.run(analyze_scripts(script_codes))
+        suspicious.extend(issues)
+        for snippet in beautified:
+            if snippet.strip():
+                preview = snippet.strip().replace("\n", " ")[:80]
+                print(f"    JS Preview: {preview}")
 
     for tag in soup.find_all(True):
         for attr in tag.attrs:
