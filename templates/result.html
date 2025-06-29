@@ -76,7 +76,7 @@
             <p><strong>Images Found:</strong> {{ result.images }}</p>
             <p><strong>Videos Found:</strong> {{ result.videos }}</p>
 
-            <h4 class="mt-4">Suspicious Findings</h4>
+            <h4 class="mt-4">Suspicious Findings <span class="badge bg-danger">!</span></h4>
             {% if result.issues %}
                 <ul>
                     {% for issue in result.issues %}
@@ -87,7 +87,16 @@
                 <p class="clean">✅ No obvious malicious patterns found.</p>
             {% endif %}
 
-            <h4 class="mt-4">Suspicious JavaScript</h4>
+            {% if result.inline_events %}
+                <h4 class="mt-4">Inline JavaScript Events <span class="badge bg-warning text-dark">!</span></h4>
+                <ul>
+                    {% for evt in result.inline_events %}
+                        <li class="text-warning">{{ evt }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <h4 class="mt-4">Suspicious JavaScript <span class="badge bg-danger">JS</span></h4>
             {% if result.deobfuscated_scripts %}
                 <input id="scriptSearch" type="search" class="form-control mb-3" placeholder="Search scripts...">
                 <div class="accordion" id="jsAccordion">
@@ -125,7 +134,11 @@
                     <div class="accordion-item">
                         <h2 class="accordion-header" id="heading0">
                             <button class="accordion-button" type="button" disabled>
-                                No suspicious scripts detected
+                                {% if result.inline_events %}
+                                    No flagged &lt;script&gt; blocks. Inline JS events detected above.
+                                {% else %}
+                                    No suspicious scripts detected
+                                {% endif %}
                             </button>
                         </h2>
                     </div>

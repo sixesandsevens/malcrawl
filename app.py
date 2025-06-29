@@ -172,6 +172,10 @@ def load_result(result_id):
         (result_id,),
     )
     issues = [r[0] for r in cur.fetchall()]
+    inline_events = []
+    for i in issues:
+        if i.startswith("Inline JS event:"):
+            inline_events.append(i.split(":", 1)[1].strip())
 
     try:
         cur.execute(
@@ -199,6 +203,7 @@ def load_result(result_id):
         "images": row["num_images"],
         "videos": row["num_videos"],
         "issues": issues,
+        "inline_events": inline_events,
         "deobfuscated_scripts": scripts,
         "status": row["status"],
     }
@@ -233,6 +238,10 @@ def export_json(domain):
         crawl_id, url, timestamp, links, images, videos, status = row
         cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?", (crawl_id,))
         issues = [r[0] for r in cur.fetchall()]
+        inline_events = []
+        for i in issues:
+            if i.startswith("Inline JS event:"):
+                inline_events.append(i.split(":", 1)[1].strip())
         cur.execute(
             "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
             (crawl_id,),
@@ -256,6 +265,7 @@ def export_json(domain):
             "images": images,
             "videos": videos,
             "issues": issues,
+            "inline_events": inline_events,
             "deobfuscated_scripts": scripts,
             "screenshot": screenshot,
             "status": status,
