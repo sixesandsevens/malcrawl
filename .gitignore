@@ -1,4 +1,7 @@
-/__pycache__
-/venv
-/screenshots
-/malcrawl.db
+__pycache__/
+*.log
+*.sqlite
+*.db
+.env
+venv/
+screenshots/
