@@ -15,12 +15,14 @@ B64_RE = re.compile(r"atob\([\"']([A-Za-z0-9+/=]+)[\"']\)")
 EVAL_UNESCAPE_RE = re.compile(r"eval\(unescape\(['\"]([^'\"]+)['\"]\)\)")
 FUNCTION_RETURN_RE = re.compile(r"Function\(['\"]return ([^'\"]+)['\"]\)\(\)")
 
+# Basic behavioral fingerprints for intent classification
 INTENT_PATTERNS = {
-    "redirection": re.compile(r"location\\.href|window\\.location"),
-    "credentials": re.compile(r"document\\.forms|password"),
+    "redirection": re.compile(r"location\\.href|window\\.location|top\\.location"),
+    "credential_theft": re.compile(r"document\\.forms|password|login", re.I),
     "beaconing": re.compile(r"fetch\(|XMLHttpRequest|navigator\\.sendBeacon"),
     "code_injection": re.compile(r"innerHTML|document\\.write"),
-    "crypto_miner": re.compile(r"CoinHive|miner", re.I),
+    "coin_miner": re.compile(r"CoinHive|miner|WebMiner", re.I),
+    "fingerprinting": re.compile(r"navigator\\.userAgent|canvas\\.toDataURL|audioContext|webGL", re.I),
     "alert_bomb": re.compile(r"alert\([^)]*\).*alert\(", re.S),
     "iframe_loader": re.compile(r"createElement\(\s*['\"]iframe['\"]\)"),
 }

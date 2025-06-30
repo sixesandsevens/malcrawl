@@ -13,7 +13,8 @@ def scan_page(soup, base_url) -> Tuple[List[str], List[dict], List[dict]]:
     suspicious: List[str] = []
     inline_events: List[dict] = []
 
-    script_codes = [s.string or '' for s in soup.find_all('script')]
+    # Grab only inline script contents to avoid blank accordion entries
+    script_codes = [s.string for s in soup.find_all('script') if s.string and s.string.strip()]
     scripts_data: List[dict] = []
     if script_codes:
         issues, scripts_data = asyncio.run(analyze_scripts(script_codes))

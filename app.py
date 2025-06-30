@@ -189,6 +189,8 @@ def load_result(result_id):
         )
         scripts = []
         for o, d, i in cur.fetchall():
+            if not (o or '').strip() and not (d or '').strip():
+                continue
             scripts.append({
                 "original": o,
                 "deobfuscated": d,

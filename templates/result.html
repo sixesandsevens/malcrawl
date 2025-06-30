@@ -65,6 +65,9 @@
 <body>
     <header class="malcrawl-header text-center position-relative">
         <h1>MalCrawl - Website Threat Analyzer</h1>
+        <nav class="mt-2">
+            <a href="{{ url_for('index') }}" class="btn btn-sm btn-light">Home</a>
+        </nav>
     </header>
 
     <main class="container my-4">
@@ -77,24 +80,17 @@
             <p><strong>Videos Found:</strong> {{ result.videos }}</p>
 
             <h4 class="mt-4">Suspicious Findings <span class="badge bg-danger">!</span></h4>
-            {% if result.issues %}
+            {% if result.issues or result.inline_events %}
                 <ul>
                     {% for issue in result.issues %}
                         <li class="suspicious">{{ issue }}</li>
                     {% endfor %}
+                    {% for evt in result.inline_events %}
+                        <li class="suspicious">Inline event <span class="badge bg-danger">{{ evt.event }}</span> in <code>&lt;{{ evt.tag }}&gt;</code></li>
+                    {% endfor %}
                 </ul>
             {% else %}
                 <p class="clean">✅ No obvious malicious patterns found.</p>
-            {% endif %}
-
-            {% if result.inline_events %}
-                <h4 class="mt-4">Inline JavaScript Events</h4>
-                <p class="text-warning">{{ result.inline_events|length }} inline event handlers found (e.g., onclick, onload)</p>
-                <ul>
-                    {% for evt in result.inline_events %}
-                        <li><span class="badge bg-danger">{{ evt.event }}</span> in <code>&lt;{{ evt.tag }}&gt;</code></li>
-                    {% endfor %}
-                </ul>
             {% endif %}
 
             <h4 class="mt-4">Suspicious JavaScript <span class="badge bg-danger">JS</span></h4>
@@ -141,7 +137,8 @@
         {% else %}
             <p>No results to display.</p>
         {% endif %}
-        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Overview</a></p>
+        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Overview</a> |
+            <a href="{{ url_for('index') }}">Home</a></p>
     </main>
 
     <footer>
