@@ -220,3 +220,90 @@ def fetch_results(domain: str) -> list:
         })
     conn.close()
     return results
+
+# Utility helpers
+
+
+def list_scans() -> list:
+    """Return (id, url, timestamp, status) for all scans."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    _ensure_base_tables(cur)
+    cur.execute(
+        "SELECT id, url, timestamp, status FROM crawl_results ORDER BY timestamp DESC"
+    )
+    rows = cur.fetchall()
+    conn.close()
+    return rows
+
+
+def fetch_result(result_id: int) -> dict | None:
+    """Load a single scan result by ID."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    _ensure_base_tables(cur)
+    _ensure_deob_table(cur)
+    _ensure_signature_table(cur)
+    _ensure_status_column(cur)
+    _ensure_target_hit_column(cur)
+    cur.execute("SELECT * FROM crawl_results WHERE id=?", (result_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+    crawl_id, url, timestamp, links, images, videos, status = row
+    cur.execute(
+        "SELECT issue FROM suspicious_findings WHERE crawl_result_id=?",
+        (crawl_id,),
+    )
+    raw_issues = [r[0] for r in cur.fetchall()]
+    issues = []
+    inline_events = []
+    for i in raw_issues:
+        if i.startswith("Inline JS event:"):
+            m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
+            if m:
+                inline_events.append({"event": m.group(2), "tag": m.group(1)})
+        else:
+            issues.append(i)
+    cur.execute(
+        "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id=?",
+        (crawl_id,),
+    )
+    scripts = []
+    for o, d, i, th in cur.fetchall():
+        scripts.append(
+            {
+                "original": o,
+                "deobfuscated": d,
+                "intent": i,
+                "changed": (d or "").strip() != (o or "").strip(),
+                "target_hit": bool(th),
+            }
+        )
+    cur.execute(
+        "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id=?",
+        (crawl_id,),
+    )
+    signatures = [
+        {"script_index": r[0], "tool": r[1], "rule": r[2], "snippet": r[3]}
+        for r in cur.fetchall()
+    ]
+    screenshot_name = sanitize_filename(url)
+    screenshot_path = os.path.join("screenshots", screenshot_name)
+    screenshot = screenshot_name if os.path.exists(screenshot_path) else None
+    conn.close()
+    return {
+        "id": crawl_id,
+        "url": url,
+        "timestamp": timestamp,
+        "links": links,
+        "images": images,
+        "videos": videos,
+        "issues": issues,
+        "inline_events": inline_events,
+        "deobfuscated_scripts": scripts,
+        "signatures": signatures,
+        "screenshot": screenshot,
+        "status": status,
+    }
