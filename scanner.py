@@ -2,19 +2,26 @@
 
 import re
 import asyncio
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 from urllib.parse import urljoin
 import requests
-from config import TIMEOUT
+from config import TIMEOUT, CONFIG
 from deobfuscator import analyze_scripts
+from signature_scanner import (
+    load_yara_rules,
+    scan_code_yara,
+    scan_code_clamav,
+)
+
+load_yara_rules(CONFIG.get("yara_rules_path"))
 
 def scan_page(
     soup,
     base_url,
     target_pattern: str | None = None,
     debug: bool = False,
-) -> Tuple[List[str], List[dict], List[dict]]:
+) -> Tuple[List[str], List[dict], List[dict], List[Dict]]:
     """Analyze parsed HTML and return suspicious findings, script details and inline events."""
     print(f"[Scan] {base_url}")
 
@@ -46,16 +53,43 @@ def scan_page(
             if debug:
                 print(f"[Debug] Empty script tag encountered")
     scripts_data: List[dict] = []
+    signature_matches: List[Dict] = []
     if script_codes:
-        issues, scripts_data = asyncio.run(analyze_scripts(script_codes, target_pattern))
+        issues, scripts_data = asyncio.run(
+            analyze_scripts(script_codes, target_pattern)
+        )
         suspicious.extend(issues)
-        for item in scripts_data:
+        for idx, item in enumerate(scripts_data, 1):
             snippet = item["deobfuscated"]
             if snippet.strip():
                 preview = snippet.strip().replace("\n", " ")[:80]
                 print(f"    JS Preview: {preview}")
             if item.get("target_hit"):
                 suspicious.append(f"target hit in script: {target_pattern}")
+
+            y_matches = scan_code_yara(snippet)
+            if y_matches:
+                for m in y_matches:
+                    signature_matches.append(
+                        {
+                            "script_index": idx,
+                            "tool": "yara",
+                            "rule": m.get("rule"),
+                            "description": m.get("description"),
+                            "snippet": (m.get("strings") or [""])[0],
+                        }
+                    )
+            c_result = scan_code_clamav(snippet)
+            if c_result and c_result.get("infected"):
+                signature_matches.append(
+                    {
+                        "script_index": idx,
+                        "tool": "clamav",
+                        "rule": c_result.get("signature"),
+                        "description": None,
+                        "snippet": "",
+                    }
+                )
 
     for tag in soup.find_all(True):
         for attr in tag.attrs:
@@ -75,5 +109,5 @@ def scan_page(
     else:
         print(f"  ✅ No major red flags found.")
 
-    return suspicious, scripts_data, inline_events
+    return suspicious, scripts_data, inline_events, signature_matches
 
