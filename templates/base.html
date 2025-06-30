@@ -52,6 +52,24 @@
             height: 200px;
             object-fit: contain;
         }
+        .copy-button {
+            background-color: #444;
+            color: white;
+            border: none;
+            padding: 3px 8px;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+            float: right;
+            margin-bottom: 5px;
+        }
+        .copy-button:hover {
+            background-color: #666;
+        }
+        .code-block-container {
+            position: relative;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -144,6 +162,21 @@
                     log.classList.toggle('d-none');
                 });
             }
+
+            const buttons = document.querySelectorAll('.copy-button');
+            buttons.forEach(button => {
+                button.addEventListener('click', () => {
+                    const codeBlock = button.nextElementSibling?.querySelector('code');
+                    if (codeBlock) {
+                        const text = codeBlock.innerText;
+                        navigator.clipboard.writeText(text).then(() => {
+                            const orig = button.textContent;
+                            button.textContent = '✅ Copied!';
+                            setTimeout(() => (button.textContent = orig), 2000);
+                        });
+                    }
+                });
+            });
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
