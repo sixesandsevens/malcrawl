@@ -37,6 +37,22 @@ def _ensure_target_hit_column(cur):
         )
 
 
+def _ensure_signature_table(cur):
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS signature_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            crawl_result_id INTEGER,
+            script_index INTEGER,
+            tool TEXT,
+            rule TEXT,
+            snippet TEXT,
+            FOREIGN KEY(crawl_result_id) REFERENCES crawl_results(id)
+        )
+        """
+    )
+
+
 def log_crawl_result(
     url,
     num_links,
@@ -44,6 +60,7 @@ def log_crawl_result(
     num_videos,
     suspicious,
     scripts=None,
+    matches=None,
     status="success",
 ):
     """Persist a single crawl result and its findings."""
@@ -53,6 +70,7 @@ def log_crawl_result(
     _ensure_status_column(cur)
     _ensure_deob_table(cur)
     _ensure_target_hit_column(cur)
+    _ensure_signature_table(cur)
 
     cur.execute(
         "INSERT INTO crawl_results (url, num_links, num_images, num_videos, status) VALUES (?, ?, ?, ?, ?)",
@@ -76,6 +94,19 @@ def log_crawl_result(
                     item.get("deobfuscated"),
                     item.get("intent"),
                     1 if item.get("target_hit") else 0,
+                ),
+            )
+    
+    if matches:
+        for m in matches:
+            cur.execute(
+                "INSERT INTO signature_matches (crawl_result_id, script_index, tool, rule, snippet) VALUES (?, ?, ?, ?, ?)",
+                (
+                    crawl_id,
+                    m.get("script_index"),
+                    m.get("tool"),
+                    m.get("rule"),
+                    m.get("snippet"),
                 ),
             )
 

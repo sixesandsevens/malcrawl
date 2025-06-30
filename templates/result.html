@@ -154,6 +154,26 @@
                 {% endif %}
             {% endif %}
 
+            <h4 class="mt-4">Threat Signatures</h4>
+            {% if result.signatures %}
+                <ul>
+                {% for m in result.signatures %}
+                    <li>
+                        <strong>{{ m.tool|upper }}</strong> hit
+                        "{{ m.rule }}" in script {{ m.script_index }}
+                        {% if m.snippet %}
+                        <div class="code-block-container mt-1">
+                            <button class="copy-button" aria-label="Copy code" title="Copy to clipboard">📋 Copy</button>
+                            <pre><code class="language-javascript">{{ m.snippet }}</code></pre>
+                        </div>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p>No signature matches.</p>
+            {% endif %}
+
         {% else %}
             <p>No results to display.</p>
         {% endif %}

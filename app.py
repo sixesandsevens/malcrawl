@@ -205,6 +205,23 @@ def load_result(result_id):
     except sqlite3.OperationalError:
         scripts = []
 
+    try:
+        cur.execute(
+            "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id = ?",
+            (result_id,),
+        )
+        signatures = [
+            {
+                "script_index": r[0],
+                "tool": r[1],
+                "rule": r[2],
+                "snippet": r[3],
+            }
+            for r in cur.fetchall()
+        ]
+    except sqlite3.OperationalError:
+        signatures = []
+
     conn.close()
 
     return {
@@ -217,6 +234,7 @@ def load_result(result_id):
         "issues": issues,
         "inline_events": inline_events,
         "deobfuscated_scripts": scripts,
+        "signatures": signatures,
         "status": row["status"],
     }
 
@@ -272,6 +290,19 @@ def export_json(domain):
                 "changed": (d or "").strip() != (o or "").strip(),
                 "target_hit": bool(th),
             })
+        cur.execute(
+            "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        signatures = [
+            {
+                "script_index": r[0],
+                "tool": r[1],
+                "rule": r[2],
+                "snippet": r[3],
+            }
+            for r in cur.fetchall()
+        ]
         screenshot_name = sanitize_filename(url)
         screenshot_path = os.path.join("screenshots", screenshot_name)
         screenshot = screenshot_name if os.path.exists(screenshot_path) else None
@@ -285,6 +316,7 @@ def export_json(domain):
             "issues": issues,
             "inline_events": inline_events,
             "deobfuscated_scripts": scripts,
+            "signatures": signatures,
             "screenshot": screenshot,
             "status": status,
         })
