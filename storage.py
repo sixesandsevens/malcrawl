@@ -27,6 +27,16 @@ def _ensure_deob_table(cur):
     )
 
 
+def _ensure_target_hit_column(cur):
+    """Ensure the `target_hit` column exists on deobfuscated_scripts."""
+    cur.execute("PRAGMA table_info(deobfuscated_scripts)")
+    columns = [r[1] for r in cur.fetchall()]
+    if 'target_hit' not in columns:
+        cur.execute(
+            "ALTER TABLE deobfuscated_scripts ADD COLUMN target_hit INTEGER DEFAULT 0"
+        )
+
+
 def log_crawl_result(
     url,
     num_links,
@@ -42,6 +52,7 @@ def log_crawl_result(
     cur = conn.cursor()
     _ensure_status_column(cur)
     _ensure_deob_table(cur)
+    _ensure_target_hit_column(cur)
 
     cur.execute(
         "INSERT INTO crawl_results (url, num_links, num_images, num_videos, status) VALUES (?, ?, ?, ?, ?)",
