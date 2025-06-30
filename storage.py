@@ -1,8 +1,42 @@
 import sqlite3
+import os
+import re
+from urllib.parse import urlparse
 
 DB_PATH = "malcrawl.db"
 
 """Utility functions for persisting crawl results to SQLite."""
+
+# helper to name screenshot files
+
+def sanitize_filename(url: str) -> str:
+    parsed = urlparse(url)
+    filename = f"{parsed.netloc}{parsed.path}".replace("/", "_").strip("_")
+    return filename + ".png" if filename else "index.png"
+
+# ensure core tables exist
+
+def _ensure_base_tables(cur):
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS crawl_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT,
+            timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            num_links INTEGER,
+            num_images INTEGER,
+            num_videos INTEGER,
+            status TEXT DEFAULT 'success'
+        )"""
+    )
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS suspicious_findings (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            crawl_result_id INTEGER,
+            issue TEXT,
+            FOREIGN KEY(crawl_result_id) REFERENCES crawl_results(id)
+        )"""
+    )
+
 
 def _ensure_status_column(cur):
     cur.execute("PRAGMA table_info(crawl_results)")
@@ -67,6 +101,7 @@ def log_crawl_result(
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    _ensure_base_tables(cur)
     _ensure_status_column(cur)
     _ensure_deob_table(cur)
     _ensure_target_hit_column(cur)
@@ -96,7 +131,7 @@ def log_crawl_result(
                     1 if item.get("target_hit") else 0,
                 ),
             )
-    
+
     if matches:
         for m in matches:
             cur.execute(
@@ -113,3 +148,75 @@ def log_crawl_result(
     conn.commit()
     conn.close()
     return crawl_id
+
+
+def fetch_results(domain: str) -> list:
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT * FROM crawl_results WHERE url LIKE ? ORDER BY timestamp DESC",
+        (f"%{domain}%",),
+    )
+    crawl_data = cur.fetchall()
+    results = []
+    for row in crawl_data:
+        crawl_id, url, timestamp, links, images, videos, status = row
+        cur.execute(
+            "SELECT issue FROM suspicious_findings WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        raw_issues = [r[0] for r in cur.fetchall()]
+        issues = []
+        inline_events = []
+        for i in raw_issues:
+            if i.startswith("Inline JS event:"):
+                m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
+                if m:
+                    inline_events.append({"event": m.group(2), "tag": m.group(1)})
+            else:
+                issues.append(i)
+        cur.execute(
+            "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        scripts = []
+        for o, d, i, th in cur.fetchall():
+            scripts.append({
+                "original": o,
+                "deobfuscated": d,
+                "intent": i,
+                "changed": (d or "").strip() != (o or "").strip(),
+                "target_hit": bool(th),
+            })
+        cur.execute(
+            "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id=?",
+            (crawl_id,),
+        )
+        signatures = [
+            {
+                "script_index": r[0],
+                "tool": r[1],
+                "rule": r[2],
+                "snippet": r[3],
+            }
+            for r in cur.fetchall()
+        ]
+        screenshot_name = sanitize_filename(url)
+        screenshot_path = os.path.join("screenshots", screenshot_name)
+        screenshot = screenshot_name if os.path.exists(screenshot_path) else None
+        results.append({
+            "id": crawl_id,
+            "url": url,
+            "timestamp": timestamp,
+            "links": links,
+            "images": images,
+            "videos": videos,
+            "issues": issues,
+            "inline_events": inline_events,
+            "deobfuscated_scripts": scripts,
+            "signatures": signatures,
+            "screenshot": screenshot,
+            "status": status,
+        })
+    conn.close()
+    return results
