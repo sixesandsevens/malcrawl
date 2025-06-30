@@ -62,6 +62,14 @@
             position: relative;
             margin-bottom: 1rem;
         }
+        .code-block-container.collapsed pre {
+            max-height: 200px;
+            overflow-y: hidden;
+        }
+        .show-more-btn {
+            display: block;
+            margin: 0.5rem 0;
+        }
         pre {
             background-color: #1e1e1e;
             color: #c9d1d9;
@@ -213,6 +221,28 @@
                     });
                 });
             }
+
+            document.querySelectorAll('.code-block-container').forEach(container => {
+                const pre = container.querySelector('pre');
+                if (!pre) return;
+                const lines = pre.innerText.split('\n').length;
+                if (lines > 20) {
+                    container.classList.add('collapsed');
+                    const toggle = document.createElement('button');
+                    toggle.textContent = 'Show more';
+                    toggle.className = 'btn btn-sm btn-outline-secondary show-more-btn';
+                    toggle.addEventListener('click', () => {
+                        if (container.classList.contains('collapsed')) {
+                            container.classList.remove('collapsed');
+                            toggle.textContent = 'Show less';
+                        } else {
+                            container.classList.add('collapsed');
+                            toggle.textContent = 'Show more';
+                        }
+                    });
+                    pre.after(toggle);
+                }
+            });
         });
     </script>
 </body>
