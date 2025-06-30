@@ -107,6 +107,9 @@
                                 {% else %}
                                     <span class="badge bg-secondary ms-2">unchanged</span>
                                 {% endif %}
+                                {% if item.target_hit %}
+                                    <span class="badge bg-warning text-dark ms-2">target</span>
+                                {% endif %}
                                 {% if item.intent %}- Suspected Intent: <em>{{ item.intent }}</em>{% endif %}
                             </button>
                         </h2>

@@ -36,7 +36,7 @@ SCAN_STATUS = {
 }
 
 
-def run_crawl(url, depth, ua, render_js, include_shots):
+def run_crawl(url, depth, ua, render_js, include_shots, target, debug):
     """Background thread entry for crawl"""
     reset_state()
     crawl(
@@ -47,6 +47,8 @@ def run_crawl(url, depth, ua, render_js, include_shots):
         render_js=render_js,
         include_screenshots=include_shots,
         status=SCAN_STATUS,
+        target_pattern=target,
+        debug=debug,
     )
     SCAN_STATUS["total"] = SCAN_STATUS.get("current_index", 0)
     SCAN_STATUS["done"] = True
@@ -61,6 +63,8 @@ def start_scan():
     ua = request.form.get("user_agent")
     render_js = request.form.get("render_js") == "on"
     include_shots = request.form.get("include_shots") == "on"
+    target = request.form.get("target_pattern")
+    debug = request.form.get("debug_mode") == "on"
 
     if not url:
         return jsonify({"error": "URL required"}), 400
@@ -80,7 +84,7 @@ def start_scan():
         }
     )
 
-    thread = Thread(target=run_crawl, args=(url, depth, ua, render_js, include_shots))
+    thread = Thread(target=run_crawl, args=(url, depth, ua, render_js, include_shots, target, debug))
     thread.daemon = True
     thread.start()
 
@@ -184,11 +188,11 @@ def load_result(result_id):
 
     try:
         cur.execute(
-            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id = ?",
+            "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id = ?",
             (result_id,),
         )
         scripts = []
-        for o, d, i in cur.fetchall():
+        for o, d, i, th in cur.fetchall():
             if not (o or '').strip() and not (d or '').strip():
                 continue
             scripts.append({
@@ -196,6 +200,7 @@ def load_result(result_id):
                 "deobfuscated": d,
                 "intent": i,
                 "changed": (d or "").strip() != (o or "").strip(),
+                "target_hit": bool(th),
             })
     except sqlite3.OperationalError:
         scripts = []
@@ -255,16 +260,17 @@ def export_json(domain):
             else:
                 issues.append(i)
         cur.execute(
-            "SELECT original, deobfuscated, intent FROM deobfuscated_scripts WHERE crawl_result_id=?",
+            "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id=?",
             (crawl_id,),
         )
         scripts = []
-        for o, d, i in cur.fetchall():
+        for o, d, i, th in cur.fetchall():
             scripts.append({
                 "original": o,
                 "deobfuscated": d,
                 "intent": i,
                 "changed": (d or "").strip() != (o or "").strip(),
+                "target_hit": bool(th),
             })
         screenshot_name = sanitize_filename(url)
         screenshot_path = os.path.join("screenshots", screenshot_name)

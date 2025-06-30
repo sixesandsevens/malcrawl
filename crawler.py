@@ -95,6 +95,8 @@ def crawl(
     browser=None,
     include_screenshots=False,
     status=None,
+    target_pattern=None,
+    debug=False,
 ):
     if _stop:
         if status is not None:
@@ -155,7 +157,7 @@ def crawl(
     sources = [s['src'] for s in soup.find_all('source', src=True)]
     total_videos = len(videos) + len(sources)
 
-    suspicious, scripts, inline_events = scan_page(soup, url)
+    suspicious, scripts, inline_events = scan_page(soup, url, target_pattern=target_pattern, debug=debug)
 
     if status is not None:
         if suspicious:
@@ -189,6 +191,8 @@ def crawl(
                 browser,
                 include_screenshots,
                 status,
+                target_pattern,
+                debug,
             )
             if _stop:
                 break
