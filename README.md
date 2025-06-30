@@ -8,6 +8,8 @@ MalCrawl is a lightweight website crawler designed for forensic analysis. It col
 - Simple HTML interface and CLI
 - **Asynchronous JavaScript deobfuscation pipeline** detecting obfuscated code, attempting to decode it and inferring potential malicious intent
 - Interactive code viewer with syntax highlighted deobfuscated scripts and copy-to-clipboard buttons
+- Targeted keyword scanning across scripts
+- Debug mode to include otherwise filtered scripts
 
 ## Usage
 ### Web Interface
@@ -21,6 +23,7 @@ Open `http://localhost:5000` in your browser.
 ### CLI
 ```bash
 python main.py --url https://example.com --sqlite
+python main.py --url https://example.com --target initWmLoginPosition --debug
 ```
 
 ## Deobfuscation Pipeline

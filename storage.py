@@ -20,6 +20,7 @@ def _ensure_deob_table(cur):
             original TEXT,
             deobfuscated TEXT,
             intent TEXT,
+            target_hit INTEGER DEFAULT 0,
             FOREIGN KEY(crawl_result_id) REFERENCES crawl_results(id)
         )
         """
@@ -57,12 +58,13 @@ def log_crawl_result(
     if scripts:
         for item in scripts:
             cur.execute(
-                "INSERT INTO deobfuscated_scripts (crawl_result_id, original, deobfuscated, intent) VALUES (?, ?, ?, ?)",
+                "INSERT INTO deobfuscated_scripts (crawl_result_id, original, deobfuscated, intent, target_hit) VALUES (?, ?, ?, ?, ?)",
                 (
                     crawl_id,
                     item.get("original"),
                     item.get("deobfuscated"),
                     item.get("intent"),
+                    1 if item.get("target_hit") else 0,
                 ),
             )
 

@@ -80,12 +80,21 @@ def infer_intent(code: str) -> List[str]:
     return intents
 
 
-async def analyze_script(js_code: str) -> Tuple[List[str], str, List[str], bool]:
+DYNAMIC_PATTERNS = {
+    "eval": re.compile(r"\beval\s*\("),
+    "Function": re.compile(r"\bFunction\s*\("),
+    "setTimeout": re.compile(r"setTimeout\s*\(\s*['\"]"),
+    "setInterval": re.compile(r"setInterval\s*\(\s*['\"]"),
+}
+
+
+async def analyze_script(js_code: str, target: str | None = None) -> Tuple[List[str], str, List[str], bool, bool]:
     """Full pipeline for a single script: detect, deobfuscate, infer intent."""
     findings: List[str] = []
     beautified = js_code
     intents: List[str] = []
     changed = False
+    target_hit = False
 
     if detect_obfuscation(js_code):
         findings.append("obfuscated JavaScript")
@@ -98,16 +107,24 @@ async def analyze_script(js_code: str) -> Tuple[List[str], str, List[str], bool]
     for intent in intents:
         findings.append(f"intent:{intent}")
 
-    return findings, beautified, intents, changed
+    for name, regex in DYNAMIC_PATTERNS.items():
+        if regex.search(beautified):
+            findings.append(f"dynamic:{name}")
+
+    if target and re.search(target, beautified, re.I):
+        target_hit = True
+        findings.append(f"target:{target}")
+
+    return findings, beautified, intents, changed, target_hit
 
 
-async def analyze_scripts(scripts: List[str]) -> Tuple[List[str], List[dict]]:
+async def analyze_scripts(scripts: List[str], target: str | None = None) -> Tuple[List[str], List[dict]]:
     """Analyze multiple scripts concurrently."""
-    tasks = [analyze_script(code) for code in scripts]
+    tasks = [analyze_script(code, target) for code in scripts]
     results = await asyncio.gather(*tasks)
     findings: List[str] = []
     processed: List[dict] = []
-    for (f, b, intents, changed), orig in zip(results, scripts):
+    for (f, b, intents, changed, hit), orig in zip(results, scripts):
         findings.extend(f)
         processed.append(
             {
@@ -115,6 +132,7 @@ async def analyze_scripts(scripts: List[str]) -> Tuple[List[str], List[dict]]:
                 "deobfuscated": b,
                 "intent": ", ".join(intents) if intents else None,
                 "changed": changed,
+                "target_hit": hit,
             }
         )
     return findings, processed

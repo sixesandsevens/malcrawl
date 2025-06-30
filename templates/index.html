@@ -11,6 +11,10 @@
     <input type="number" name="depth" min="1" max="5" value="2" class="form-control">
   </div>
   <div>
+    <label class="form-label">Target Pattern:</label>
+    <input type="text" name="target_pattern" class="form-control" placeholder="e.g. initWmLoginPosition">
+  </div>
+  <div>
     <label class="form-label">User-Agent:</label>
     <select name="user_agent" class="form-select">
       {% for ua in user_agents %}
@@ -25,6 +29,10 @@
   <div class="form-check">
     <input class="form-check-input" type="checkbox" name="include_shots" id="include_shots">
     <label class="form-check-label" for="include_shots">Capture Screenshots</label>
+  </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" name="debug_mode" id="debug_mode">
+    <label class="form-check-label" for="debug_mode">Debug Mode (include filtered scripts)</label>
   </div>
   <div>
     <label class="form-label">Output Format:</label>
