@@ -181,6 +181,16 @@
             {% else %}
                 <p>No signature matches.</p>
             {% endif %}
+            <h4 class="mt-4">Sandbox Behavior</h4>
+            {% if result.sandbox_behavior %}
+                <ul>
+                {% for sb in result.sandbox_behavior %}
+                    <li><pre class="bg-dark text-light p-2"><code>{{ sb.log|join("\n") }}</code></pre></li>
+                {% endfor %}
+                </ul>
+            {% else %}
+                <p>No sandbox data.</p>
+            {% endif %}
 
         {% else %}
             <p>No results to display.</p>
