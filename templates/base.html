@@ -133,6 +133,8 @@
                     e.preventDefault();
                     progress.style.display = 'block';
                     const fd = new FormData(form);
+                    window.FULL_LOGGING = fd.get('full_logging') === 'on';
+                    log.textContent = '';
                     const r = await fetch('/start_scan', { method: 'POST', body: fd });
                     const data = await r.json();
                     window.SCAN_ID = data.scan_id;
