@@ -39,6 +39,9 @@ import sqlite3
 from urllib.parse import urlparse
 import os
 import datetime
+import sys
+import io
+import contextlib
 from threading import Thread
 from crawler import crawl, sanitize_filename, reset_state
 from crawler import stop_scan
@@ -69,20 +72,43 @@ SCAN_STATUS = {
 }
 
 
+class StatusLogger(io.TextIOBase):
+    """IO wrapper that mirrors writes to the web UI status log."""
+
+    def __init__(self, status):
+        self.status = status
+        self.buffer = ""
+
+    def write(self, data):
+        sys.__stdout__.write(data)
+        self.buffer += data
+        while "\n" in self.buffer:
+            line, self.buffer = self.buffer.split("\n", 1)
+            if line:
+                self.status.setdefault("logs", []).append(line)
+
+    def flush(self):  # pragma: no cover - passthrough
+        sys.__stdout__.flush()
+
+
 def run_crawl(url, depth, ua, render_js, include_shots, target, debug):
     """Background thread entry for crawl"""
     reset_state()
-    crawl(
-        url,
-        depth=depth,
-        use_sqlite=True,
-        user_agent=ua,
-        render_js=render_js,
-        include_screenshots=include_shots,
-        status=SCAN_STATUS,
-        target_pattern=target,
-        debug=debug,
-    )
+    logger = StatusLogger(SCAN_STATUS)
+    with contextlib.redirect_stdout(logger), contextlib.redirect_stderr(logger):
+        crawl(
+            url,
+            depth=depth,
+            use_sqlite=True,
+            user_agent=ua,
+            render_js=render_js,
+            include_screenshots=include_shots,
+            status=SCAN_STATUS,
+            target_pattern=target,
+            debug=debug,
+        )
+    if logger.buffer:
+        SCAN_STATUS.setdefault("logs", []).append(logger.buffer.strip())
     SCAN_STATUS["total"] = SCAN_STATUS.get("current_index", 0)
     SCAN_STATUS["done"] = True
     SCAN_STATUS["stage"] = "complete"

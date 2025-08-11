@@ -149,6 +149,7 @@
                         }
                         if (data.logs) {
                             log.textContent = data.logs.join('\n');
+                            log.scrollTop = log.scrollHeight;
                         }
                         if (data.done) {
                             clearInterval(poll);
