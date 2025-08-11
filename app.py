@@ -23,6 +23,7 @@ from config import MAX_PAGES
 app = Flask(__name__)
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("app")
+FULL_LOGGING = logging.getLogger().getEffectiveLevel() <= logging.DEBUG
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -269,10 +270,20 @@ def signatures_page():
     return render_template("signatures.html", year=datetime.datetime.now().year)
 
 
-@app.route("/settings")
+@app.route("/settings", methods=["GET", "POST"])
 def settings_page():
-    """Placeholder page for application settings."""
-    return render_template("settings.html", year=datetime.datetime.now().year)
+    """Application settings, including full logging toggle."""
+    global FULL_LOGGING
+    if request.method == "POST":
+        FULL_LOGGING = request.form.get("full_logging") == "on"
+        logging.getLogger().setLevel(logging.DEBUG if FULL_LOGGING else logging.INFO)
+        log.info("full_logging_toggle", extra={"extra": {"enabled": FULL_LOGGING}})
+        return redirect(url_for("settings_page"))
+    return render_template(
+        "settings.html",
+        full_logging=FULL_LOGGING,
+        year=datetime.datetime.now().year,
+    )
 
 
 @app.route("/", methods=["GET"])
