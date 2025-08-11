@@ -33,7 +33,7 @@ MalCrawl is a **forensic web crawler** focused on web-page behavior, suspicious 
 
 ## 🎯 30‑Day Priorities (Quick Wins)
 - [ ] **Status/Cancel**: return `scan_id` from `/start_scan`; add `/status/<scan_id>` polling and `/cancel/<scan_id>`; persist stage progress: `queued → fetching → rendering → scanning → signatures → done`.
-- [ ] **Top‑level nav**: Global navbar (New Scan • Recent Scans • Signatures • Settings). “Back to results list” on details pages.
+ - [ ] **Top‑level nav**: Global navbar (New Scan • Recent Scans • Signatures). “Back to results list” on details pages.
 - [ ] **JS viewer polish**: line numbers, fixed-height + scroll, copy buttons on both panes, byte length + hash in headers.
 - [ ] **Backends toggle**: `SCANNER_BACKENDS=["yara","clamav"]`, CLI `--backends=yara|clamav|all`; per-backend hit logging.
 - [ ] **Export UX**: `/export/<scan_id>.json` + CLI `malcrawl export <scan_id> --output path.json`.

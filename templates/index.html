@@ -34,6 +34,10 @@
     <input class="form-check-input" type="checkbox" name="debug_mode" id="debug_mode">
     <label class="form-check-label" for="debug_mode">Debug Mode (include filtered scripts)</label>
   </div>
+  <div class="form-check">
+    <input class="form-check-input" type="checkbox" name="full_logging" id="full_logging" {% if full_logging %}checked{% endif %}>
+    <label class="form-check-label" for="full_logging">Enable full logging</label>
+  </div>
   <div>
     <label class="form-label">Output Format:</label>
     <select name="output_format" class="form-select">
