@@ -225,17 +225,61 @@ def fetch_results(domain: str) -> list:
 # Utility helpers
 
 
-def list_scans() -> list:
-    """Return (id, url, timestamp, status) for all scans."""
+def list_scans(page: int = 1, limit: int = 50):
+    """Return a paginated list of scans."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    _ensure_base_tables(cur)
+    off = (page - 1) * limit
+    cur.execute("SELECT COUNT(*) FROM crawl_results")
+    total = cur.fetchone()[0]
+    cur.execute(
+        """SELECT id, url as domain, timestamp as started_at, timestamp as finished_at, status
+           FROM crawl_results ORDER BY timestamp DESC LIMIT ? OFFSET ?""",
+        (limit, off),
+    )
+    items = [dict(zip([c[0] for c in cur.description], row)) for row in cur.fetchall()]
+    conn.close()
+    return items, total
+
+
+def get_scan(scan_id: int):
+    """Return a single scan's metadata."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     _ensure_base_tables(cur)
     cur.execute(
-        "SELECT id, url, timestamp, status FROM crawl_results ORDER BY timestamp DESC"
+        """SELECT id, url as domain, timestamp as started_at, timestamp as finished_at, status
+           FROM crawl_results WHERE id=?""",
+        (scan_id,),
     )
-    rows = cur.fetchall()
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return None
+    data = dict(zip([c[0] for c in cur.description], row))
     conn.close()
-    return rows
+    return data
+
+
+def get_results_for_scan(scan_id: int, page: int = 1, limit: int = 100):
+    """Return suspicious findings for a scan."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    off = (page - 1) * limit
+    cur.execute(
+        "SELECT COUNT(*) FROM suspicious_findings WHERE crawl_result_id=?",
+        (scan_id,),
+    )
+    total = cur.fetchone()[0]
+    cur.execute(
+        """SELECT id, issue FROM suspicious_findings
+           WHERE crawl_result_id=? LIMIT ? OFFSET ?""",
+        (scan_id, limit, off),
+    )
+    rows = [dict(zip([c[0] for c in cur.description], r)) for r in cur.fetchall()]
+    conn.close()
+    return rows, total
 
 
 def fetch_result(result_id: int) -> dict | None:

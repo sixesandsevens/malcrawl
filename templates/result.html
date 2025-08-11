@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% block extra_head %}
 <link rel="stylesheet" href="/static/css/github-dark.min.css">
+<link rel="stylesheet" href="/static/css/app.css">
 {% endblock %}
 {% block content %}
     {% if result %}
@@ -10,6 +11,24 @@
         <p><strong>Links Found:</strong> {{ result.links }}</p>
         <p><strong>Images Found:</strong> {{ result.images }}</p>
         <p><strong>Videos Found:</strong> {{ result.videos }}</p>
+
+        {% if screenshots %}
+        <div class="shots-grid">
+          {% for shot in screenshots %}
+            <div class="shot">
+              <img src="{{ shot.url }}" alt="" onclick="openShot('{{ shot.url }}')">
+            </div>
+          {% endfor %}
+        </div>
+        {% elif result.status and 'error' in result.status %}
+          <span class="badge bg-danger">Screenshot failed: {{ result.status }}</span>
+        {% endif %}
+
+        <div id="shot-modal" class="modal hidden">
+          <button class="close" onclick="closeShot()">×</button>
+          <a id="open-original" target="_blank">Open original</a>
+          <img id="shot-img">
+        </div>
 
         <h4 class="mt-4">Suspicious Findings <span class="badge bg-danger">!</span></h4>
         {% if result.issues or result.inline_events %}
@@ -106,5 +125,6 @@
     {% else %}
         <p>No results to display.</p>
     {% endif %}
-    <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Results List</a> | <a href="{{ url_for('index') }}">Home</a></p>
+        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Results List</a> | <a href="{{ url_for('index') }}">Home</a></p>
+<script src="/static/js/viewer.js"></script>
 {% endblock %}

@@ -12,10 +12,16 @@ import sys
 import io
 import contextlib
 from threading import Thread
-from crawler import crawl, sanitize_filename, reset_state
-from crawler import stop_scan
+from uuid import uuid4
+import logging
+
+from crawler import crawl, sanitize_filename, reset_state, CancelledError
+from storage import list_scans, get_scan, get_results_for_scan
+from logging_setup import setup_logging
+from config import MAX_PAGES
 
 app = Flask(__name__)
+setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -28,59 +34,110 @@ def highlight_bad(code: str) -> Markup:
     return Markup(highlighted)
 
 app.add_template_filter(highlight_bad, "highlight_bad")
+API_TOKEN = os.getenv("MALCRAWL_API_TOKEN")
 
-# Simple dictionary to expose crawl progress
-SCAN_STATUS = {
-    "current_url": "",
-    "current_index": 0,
-    "total": 0,
-    "logs": [],
-    "done": True,
-    "domain": "",
-    "stage": "idle",
-}
+SCAN_STATUS = {}
+CANCEL_FLAGS = set()
 
 
-class StatusLogger(io.TextIOBase):
-    """IO wrapper that mirrors writes to the web UI status log."""
-
-    def __init__(self, status):
-        self.status = status
-        self.buffer = ""
-
-    def write(self, data):
-        sys.__stdout__.write(data)
-        self.buffer += data
-        while "\n" in self.buffer:
-            line, self.buffer = self.buffer.split("\n", 1)
-            if line:
-                self.status.setdefault("logs", []).append(line)
-
-    def flush(self):  # pragma: no cover - passthrough
-        sys.__stdout__.flush()
+def require_token():
+    token = request.headers.get("X-API-Token")
+    if not API_TOKEN or token == API_TOKEN:
+        return
+    return jsonify({"error": "unauthorized"}), 401
 
 
-def run_crawl(url, depth, ua, render_js, include_shots, target, debug):
+def new_scan_status(domain: str) -> str:
+    sid = uuid4().hex
+    SCAN_STATUS[sid] = {
+        "scan_id": sid,
+        "domain": domain,
+        "phase": "queue",
+        "done": 0,
+        "total": 0,
+        "current_url": None,
+        "elapsed": 0.0,
+        "status": "running",
+        "errors": [],
+    }
+    return sid
+
+
+@app.get("/scan-status/<scan_id>")
+def scan_status(scan_id):
+    return jsonify(SCAN_STATUS.get(scan_id) or {"error": "not_found"})
+
+
+@app.post("/scan-cancel/<scan_id>")
+def scan_cancel(scan_id):
+    if scan_id in SCAN_STATUS:
+        CANCEL_FLAGS.add(scan_id)
+        SCAN_STATUS[scan_id]["status"] = "cancelling"
+        return jsonify({"ok": True})
+    return jsonify({"error": "not_found"}), 404
+
+
+@app.get("/api/scans")
+def api_scans():
+    auth = require_token()
+    if auth:
+        return auth
+    page = int(request.args.get("page", 1))
+    limit = min(int(request.args.get("limit", 50)), 200)
+    scans, total = list_scans(page=page, limit=limit)
+    return jsonify({"items": scans, "page": page, "limit": limit, "total": total})
+
+
+@app.get("/api/scans/<scan_id>")
+def api_scan(scan_id):
+    auth = require_token()
+    if auth:
+        return auth
+    scan = get_scan(scan_id)
+    if not scan:
+        return jsonify({"error": "not_found"}), 404
+    return jsonify(scan)
+
+
+@app.get("/api/scans/<scan_id>/results")
+def api_scan_results(scan_id):
+    auth = require_token()
+    if auth:
+        return auth
+    page = int(request.args.get("page", 1))
+    limit = min(int(request.args.get("limit", 100)), 500)
+    rows, total = get_results_for_scan(scan_id, page=page, limit=limit)
+    return jsonify({"items": rows, "page": page, "limit": limit, "total": total})
+
+
+def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug):
     """Background thread entry for crawl"""
     reset_state()
-    logger = StatusLogger(SCAN_STATUS)
-    with contextlib.redirect_stdout(logger), contextlib.redirect_stderr(logger):
+    start = datetime.datetime.utcnow()
+    try:
         crawl(
             url,
+            scan_id=scan_id,
             depth=depth,
             use_sqlite=True,
             user_agent=ua,
             render_js=render_js,
             include_screenshots=include_shots,
-            status=SCAN_STATUS,
             target_pattern=target,
             debug=debug,
         )
-    if logger.buffer:
-        SCAN_STATUS.setdefault("logs", []).append(logger.buffer.strip())
-    SCAN_STATUS["total"] = SCAN_STATUS.get("current_index", 0)
-    SCAN_STATUS["done"] = True
-    SCAN_STATUS["stage"] = "complete"
+        if SCAN_STATUS.get(scan_id, {}).get("status") == "running":
+            SCAN_STATUS[scan_id]["phase"] = "done"
+            SCAN_STATUS[scan_id]["status"] = "completed"
+    except CancelledError:
+        SCAN_STATUS[scan_id]["phase"] = "done"
+        SCAN_STATUS[scan_id]["status"] = "cancelled"
+    except Exception as exc:
+        SCAN_STATUS[scan_id]["phase"] = "done"
+        SCAN_STATUS[scan_id]["status"] = "error"
+        SCAN_STATUS[scan_id].setdefault("errors", []).append(str(exc))
+    finally:
+        SCAN_STATUS[scan_id]["elapsed"] = (datetime.datetime.utcnow() - start).total_seconds()
 
 
 @app.route("/start_scan", methods=["POST"])
@@ -98,38 +155,14 @@ def start_scan():
         return jsonify({"error": "URL required"}), 400
 
     domain = urlparse(url).netloc
+    sid = new_scan_status(domain)
+    SCAN_STATUS[sid]["total"] = MAX_PAGES
 
-    # reset status
-    SCAN_STATUS.update(
-        {
-            "current_url": "",
-            "current_index": 0,
-            "total": 0,
-            "logs": [],
-            "done": False,
-            "domain": domain,
-            "stage": "queueing",
-        }
-    )
-
-    thread = Thread(target=run_crawl, args=(url, depth, ua, render_js, include_shots, target, debug))
+    thread = Thread(target=run_crawl, args=(sid, url, depth, ua, render_js, include_shots, target, debug))
     thread.daemon = True
     thread.start()
 
-    return jsonify({"status": "started"})
-
-
-@app.route("/scan-status")
-def scan_status():
-    """Return current crawl status."""
-    return jsonify(SCAN_STATUS)
-
-
-@app.route("/stop_scan", methods=["POST"])
-def stop_scan_route():
-    """Endpoint to stop an in-progress scan."""
-    stop_scan()
-    return jsonify({"status": "stopping"})
+    return jsonify({"scan_id": sid})
 
 @app.route('/screenshots/<filename>')
 def serve_screenshot(filename):
@@ -278,6 +311,9 @@ def load_result(result_id):
         ]
     except sqlite3.OperationalError:
         signatures = []
+    screenshot_name = sanitize_filename(row["url"])
+    screenshot_path = os.path.join("screenshots", screenshot_name)
+    screenshot = screenshot_name if os.path.exists(screenshot_path) else None
 
     conn.close()
 
@@ -292,6 +328,7 @@ def load_result(result_id):
         "inline_events": inline_events,
         "deobfuscated_scripts": scripts,
         "signatures": signatures,
+        "screenshot": screenshot,
         "status": row["status"],
     }
 
@@ -302,10 +339,14 @@ def view_result(result_id):
     result = load_result(result_id)
     if result:
         domain = urlparse(result["url"]).netloc
+        shots = []
+        if result.get("screenshot"):
+            shots.append({"url": url_for('serve_screenshot', filename=result["screenshot"])})
         return render_template(
             "result.html",
             result=result,
             domain=domain,
+            screenshots=shots,
             year=datetime.datetime.now().year,
         )
     else:
