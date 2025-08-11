@@ -22,6 +22,7 @@ from config import MAX_PAGES
 
 app = Flask(__name__)
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
+log = logging.getLogger("app")
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -63,6 +64,37 @@ def new_scan_status(domain: str) -> str:
     return sid
 
 
+@app.before_request
+def log_request():
+    """Log basic request information."""
+    log.info(
+        "request",
+        extra={
+            "extra": {
+                "method": request.method,
+                "path": request.path,
+                "remote_addr": request.remote_addr,
+            }
+        },
+    )
+
+
+@app.after_request
+def log_response(response):
+    """Log response details after handling a request."""
+    log.info(
+        "response",
+        extra={
+            "extra": {
+                "method": request.method,
+                "path": request.path,
+                "status": response.status_code,
+            }
+        },
+    )
+    return response
+
+
 @app.get("/scan-status/<scan_id>")
 def scan_status(scan_id):
     return jsonify(SCAN_STATUS.get(scan_id) or {"error": "not_found"})
@@ -73,7 +105,9 @@ def scan_cancel(scan_id):
     if scan_id in SCAN_STATUS:
         CANCEL_FLAGS.add(scan_id)
         SCAN_STATUS[scan_id]["status"] = "cancelling"
+        log.info("scan_cancel", extra={"extra": {"scan_id": scan_id}})
         return jsonify({"ok": True})
+    log.warning("scan_cancel_not_found", extra={"extra": {"scan_id": scan_id}})
     return jsonify({"error": "not_found"}), 404
 
 
@@ -114,6 +148,20 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug):
     """Background thread entry for crawl"""
     reset_state()
     start = datetime.datetime.utcnow()
+    log.info(
+        "scan_thread_start",
+        extra={
+            "extra": {
+                "scan_id": scan_id,
+                "url": url,
+                "depth": depth,
+                "render_js": render_js,
+                "screenshots": include_shots,
+                "target": target,
+                "debug": debug,
+            }
+        },
+    )
     try:
         crawl(
             url,
@@ -138,6 +186,16 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug):
         SCAN_STATUS[scan_id].setdefault("errors", []).append(str(exc))
     finally:
         SCAN_STATUS[scan_id]["elapsed"] = (datetime.datetime.utcnow() - start).total_seconds()
+        log.info(
+            "scan_thread_end",
+            extra={
+                "extra": {
+                    "scan_id": scan_id,
+                    "status": SCAN_STATUS[scan_id].get("status"),
+                    "elapsed": SCAN_STATUS[scan_id].get("elapsed"),
+                }
+            },
+        )
 
 
 @app.route("/start_scan", methods=["POST"])
@@ -158,7 +216,26 @@ def start_scan():
     sid = new_scan_status(domain)
     SCAN_STATUS[sid]["total"] = MAX_PAGES
 
-    thread = Thread(target=run_crawl, args=(sid, url, depth, ua, render_js, include_shots, target, debug))
+    log.info(
+        "scan_start",
+        extra={
+            "extra": {
+                "scan_id": sid,
+                "url": url,
+                "depth": depth,
+                "user_agent": ua,
+                "render_js": render_js,
+                "screenshots": include_shots,
+                "target": target,
+                "debug": debug,
+            }
+        },
+    )
+
+    thread = Thread(
+        target=run_crawl,
+        args=(sid, url, depth, ua, render_js, include_shots, target, debug),
+    )
     thread.daemon = True
     thread.start()
 
