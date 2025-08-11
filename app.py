@@ -1,34 +1,3 @@
-# ============================================================
-# MalCrawl — Codex Context Header
-# Purpose: Keep changes aligned with MalCrawl’s architecture, priorities, and security model.
-#
-# PROJECT SUMMARY
-# - MalCrawl is a forensic web crawler that fetches pages, (optionally) renders JS with Selenium, 
-#   extracts inline/external JS, deobfuscates it, and flags suspicious behavior via signatures 
-#   (YARA, ClamAV, custom JSON DB). Results are viewable in a web UI and via CLI.
-# - Core values: lean core, modular heavy features (sandbox, diffing, plugin scanners), 
-#   safe-by-default execution, human-readable output.
-#
-# CURRENT PRIORITIES (implement in this order)
-# 1) CLI Enhancements:
-#    - Full flags for scope, depth, detection backends, output format
-#    - Progress output
-#    - Resume previous scan
-# 2) Sandboxing v1:
-#    - Isolated JS execution (Node VM / py_mini_racer)
-#    - Strict time/memory limits
-#    - No network access
-#    - Log eval, Function(), DOM writes, and timeouts
-# 3) README Improvements:
-#    - Add CLI usage examples
-#    - Clarify installation process
-#    - Include contribution guidelines
-#
-# CODING STYLE NOTES:
-# - Keep modules small and single-purpose.
-# - Use dependency injection for scanners to allow easy swapping.
-# - Maintain HTML output readability (avoid dumping raw JSON without formatting).
-# ============================================================
 
 
 from flask import send_from_directory
