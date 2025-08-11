@@ -141,6 +141,35 @@ def serve_screenshot(filename):
     return send_from_directory('screenshots', filename)
 
 
+@app.route("/recent")
+def recent_scans():
+    """List domains from the most recent crawl results."""
+    conn = sqlite3.connect("malcrawl.db")
+    cur = conn.cursor()
+    cur.execute("SELECT url FROM crawl_results ORDER BY timestamp DESC LIMIT 50")
+    seen = []
+    domains = []
+    for (url,) in cur.fetchall():
+        domain = urlparse(url).netloc
+        if domain not in seen:
+            seen.append(domain)
+            domains.append(domain)
+    conn.close()
+    return render_template("recent.html", domains=domains, year=datetime.datetime.now().year)
+
+
+@app.route("/signatures")
+def signatures_page():
+    """Placeholder page for signature management."""
+    return render_template("signatures.html", year=datetime.datetime.now().year)
+
+
+@app.route("/settings")
+def settings_page():
+    """Placeholder page for application settings."""
+    return render_template("settings.html", year=datetime.datetime.now().year)
+
+
 @app.route("/", methods=["GET"])
 def index():
     """Render the main form."""
