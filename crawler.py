@@ -190,7 +190,7 @@ def crawl(
     total_videos = len(videos) + len(sources)
 
     suspicious, scripts, inline_events, matches = scan_page(
-        soup, url, target_pattern=target_pattern, debug=debug
+        soup, url, target_pattern=target_pattern, debug=debug, user_agent=user_agent
     )
 
     if status is not None:

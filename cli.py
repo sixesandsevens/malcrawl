@@ -220,7 +220,10 @@ def main() -> None:
         default="json",
         help="Export format for results",
     )
-    scan.add_argument("--user-agent", help="Custom User-Agent header")
+    scan.add_argument(
+        "--user-agent",
+        help="Custom User-Agent header for all HTTP requests",
+    )
     scan.add_argument("--render-js", action="store_true", help="Use Selenium to render JS")
     scan.add_argument("--sandbox", action="store_true", help="Run sandbox analysis of scripts")
     scan.add_argument("--quiet", action="store_true", help="Suppress status output")
