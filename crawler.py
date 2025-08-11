@@ -110,11 +110,13 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
 
     driver = None
     try:
+        print(f"[Selenium] Launching {browser} driver for {url}")
         driver = get_driver(browser)
         driver.set_page_load_timeout(TIMEOUT)
         driver.get(url)
 
         if screenshot_path:
+            print(f"[Selenium] Saving screenshot to {screenshot_path}")
             os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
             driver.save_screenshot(screenshot_path)
 
@@ -125,6 +127,7 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
     finally:
         if driver:
             driver.quit()
+            print("[Selenium] Driver closed")
 
 def sanitize_filename(url):
     parsed = urlparse(url)
@@ -174,8 +177,17 @@ def crawl(
             if include_screenshots:
                 screenshot_name = sanitize_filename(url)
                 screenshot_path = os.path.join("screenshots", screenshot_name)
+                print(f"[Selenium] Screenshot will be saved to {screenshot_path}")
+                if status is not None:
+                    status.setdefault("logs", []).append(
+                        f"Saving screenshot to {screenshot_path}"
+                    )
             html = fetch_with_selenium(url, screenshot_path, browser=browser)
             if html is None:
+                if status is not None:
+                    status.setdefault("logs", []).append(
+                        f"Selenium failed to fetch {url}"
+                    )
                 if use_sqlite:
                     log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")
                 return
