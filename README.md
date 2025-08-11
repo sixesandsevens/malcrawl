@@ -43,8 +43,8 @@ Open `http://localhost:5000` in your browser to start a scan.
 The command line exposes most functionality:
 
 ```bash
-# scan a live URL
-python cli.py scan --url https://example.com --sandbox --verbose
+# scan a live URL with a custom User-Agent
+python cli.py scan --url https://example.com --user-agent "MyCrawler/1.0" --sandbox --verbose
 
 # scan a local file
 python cli.py scan --file sample.html --export text
@@ -61,6 +61,10 @@ python cli.py export 1 --format json --output result.json
 ```
 
 Use `python cli.py --help` for a full list of arguments.
+
+Customising the User-Agent ensures that all HTTP requests, including external
+script downloads, present the specified identifier. Some sites block requests
+without a User-Agent which can cause script fetching to fail.
 
 ## Optional Sandboxing
 If Node.js is available you can enable lightweight sandbox execution of detected scripts. Behaviour such as network requests or DOM access will be logged alongside other findings.

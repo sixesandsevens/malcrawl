@@ -39,7 +39,7 @@ from typing import List, Tuple, Dict
 
 from urllib.parse import urljoin
 import requests
-from config import TIMEOUT, CONFIG
+from config import TIMEOUT, CONFIG, DEFAULT_USER_AGENT
 from deobfuscator import analyze_scripts
 from signature_scanner import (
     load_yara_rules,
@@ -54,6 +54,7 @@ def scan_page(
     base_url,
     target_pattern: str | None = None,
     debug: bool = False,
+    user_agent: str = DEFAULT_USER_AGENT,
 ) -> Tuple[List[str], List[dict], List[dict], List[Dict]]:
     """Analyze parsed HTML and return suspicious findings, script details and inline events."""
     print(f"[Scan] {base_url}")
@@ -73,7 +74,8 @@ def scan_page(
         elif s_tag.get('src'):
             src_url = urljoin(base_url, s_tag['src'])
             try:
-                resp = requests.get(src_url, timeout=TIMEOUT)
+                headers = {"User-Agent": user_agent}
+                resp = requests.get(src_url, timeout=TIMEOUT, headers=headers)
                 if resp.ok:
                     script_codes.append(resp.text)
                 else:
