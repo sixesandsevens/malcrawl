@@ -100,18 +100,31 @@ def get_driver(browser="firefox"):
     raise RuntimeError("No compatible WebDriver found for the selected browser")
 
 def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
+    """Fetch a page using Selenium with a bounded load time.
+
+    Selenium's driver.get() can hang indefinitely if a page never finishes
+    loading. To avoid blocking the crawl, a page-load timeout is set and the
+    driver is always quit in a finally block. Optionally capture a screenshot
+    when ``screenshot_path`` is provided.
+    """
+
+    driver = None
     try:
         driver = get_driver(browser)
+        driver.set_page_load_timeout(TIMEOUT)
         driver.get(url)
+
         if screenshot_path:
             os.makedirs(os.path.dirname(screenshot_path), exist_ok=True)
             driver.save_screenshot(screenshot_path)
-        html = driver.page_source
-        driver.quit()
-        return html
+
+        return driver.page_source
     except WebDriverException as e:
         print(f"[Selenium Error] {e}")
         return None
+    finally:
+        if driver:
+            driver.quit()
 
 def sanitize_filename(url):
     parsed = urlparse(url)
