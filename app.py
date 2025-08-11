@@ -1,7 +1,7 @@
 
 
 from flask import send_from_directory
-from flask import Flask, render_template, request, redirect, url_for, jsonify
+from flask import Flask, render_template, request, url_for, jsonify
 from markupsafe import Markup, escape
 import re
 import sqlite3
@@ -209,6 +209,12 @@ def start_scan():
     include_shots = request.form.get("include_shots") == "on"
     target = request.form.get("target_pattern")
     debug = request.form.get("debug_mode") == "on"
+    full_logging = request.form.get("full_logging") == "on"
+
+    global FULL_LOGGING
+    FULL_LOGGING = full_logging
+    logging.getLogger().setLevel(logging.DEBUG if FULL_LOGGING else logging.INFO)
+    log.info("full_logging_toggle", extra={"extra": {"enabled": FULL_LOGGING}})
 
     if not url:
         return jsonify({"error": "URL required"}), 400
@@ -270,22 +276,6 @@ def signatures_page():
     return render_template("signatures.html", year=datetime.datetime.now().year)
 
 
-@app.route("/settings", methods=["GET", "POST"])
-def settings_page():
-    """Application settings, including full logging toggle."""
-    global FULL_LOGGING
-    if request.method == "POST":
-        FULL_LOGGING = request.form.get("full_logging") == "on"
-        logging.getLogger().setLevel(logging.DEBUG if FULL_LOGGING else logging.INFO)
-        log.info("full_logging_toggle", extra={"extra": {"enabled": FULL_LOGGING}})
-        return redirect(url_for("settings_page"))
-    return render_template(
-        "settings.html",
-        full_logging=FULL_LOGGING,
-        year=datetime.datetime.now().year,
-    )
-
-
 @app.route("/", methods=["GET"])
 def index():
     """Render the main form."""
@@ -297,7 +287,13 @@ def index():
     ]
     output_formats = ["html", "json", "zip"]
 
-    return render_template("index.html", user_agents=user_agents, output_formats=output_formats, year=datetime.datetime.now().year)
+    return render_template(
+        "index.html",
+        user_agents=user_agents,
+        output_formats=output_formats,
+        full_logging=FULL_LOGGING,
+        year=datetime.datetime.now().year,
+    )
 
 @app.route("/site/<path:domain>")
 def site_results(domain):
