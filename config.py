@@ -8,6 +8,12 @@ DEFAULT_USER_AGENT = "MalCrawlBot/0.1"
 DEFAULT_DEPTH = 2
 TIMEOUT = 5
 
+# resource caps
+MAX_PAGES = int(os.getenv("MAX_PAGES", "300"))
+MAX_RUNTIME_SECS = int(os.getenv("MAX_RUNTIME_SECS", "600"))
+MAX_SCRIPTS = int(os.getenv("MAX_SCRIPTS", "5000"))
+MAX_BYTES_HTML = int(os.getenv("MAX_BYTES_HTML", "20_000_000"))
+
 # default signature/scanner configuration
 _DEFAULT_CFG = {
     "enable_yara": True,
