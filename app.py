@@ -24,6 +24,7 @@ app = Flask(__name__)
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 log = logging.getLogger("app")
 FULL_LOGGING = logging.getLogger().getEffectiveLevel() <= logging.DEBUG
+LOG_POSITIONS: dict[str, int] = {}
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -110,6 +111,22 @@ def scan_cancel(scan_id):
         return jsonify({"ok": True})
     log.warning("scan_cancel_not_found", extra={"extra": {"scan_id": scan_id}})
     return jsonify({"error": "not_found"}), 404
+
+
+@app.get("/scan-log/<scan_id>")
+def scan_log(scan_id):
+    """Return incremental log lines for the given scan."""
+    log_path = os.path.join("logs", "malcrawl.log")
+    pos = LOG_POSITIONS.get(scan_id, 0)
+    lines: list[str] = []
+    if os.path.exists(log_path):
+        with open(log_path, "r", encoding="utf-8") as fh:
+            fh.seek(pos)
+            for line in fh:
+                if f'"scan_id": "{scan_id}"' in line:
+                    lines.append(line.rstrip())
+            LOG_POSITIONS[scan_id] = fh.tell()
+    return jsonify({"lines": lines})
 
 
 @app.get("/api/scans")
@@ -222,6 +239,7 @@ def start_scan():
     domain = urlparse(url).netloc
     sid = new_scan_status(domain)
     SCAN_STATUS[sid]["total"] = MAX_PAGES
+    LOG_POSITIONS[sid] = os.path.getsize(os.path.join("logs", "malcrawl.log")) if os.path.exists(os.path.join("logs", "malcrawl.log")) else 0
 
     log.info(
         "scan_start",
