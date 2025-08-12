@@ -6,25 +6,94 @@ from markupsafe import Markup, escape
 import re
 import sqlite3
 from urllib.parse import urlparse
-import os
-import datetime
+import os, logging, json, uuid
+from logging.handlers import RotatingFileHandler
+from datetime import datetime
 import sys
 import io
 import contextlib
 from threading import Thread
-from uuid import uuid4
-import logging
 
 from crawler import crawl, sanitize_filename, reset_state, CancelledError
 from storage import list_scans, get_scan, get_results_for_scan
-from logging_setup import setup_logging
-from config import MAX_PAGES
+from config import (
+    MAX_PAGES,
+    LOG_DIR,
+    LOG_LEVEL,
+    LOG_TO_CONSOLE,
+    LOG_JSON,
+    LOG_ROTATE_MB,
+    LOG_ROTATE_BACKUPS,
+)
+from logging_utils import with_ctx, bind
 
-app = Flask(__name__)
-setup_logging(os.getenv("LOG_LEVEL", "INFO"))
-log = logging.getLogger("app")
-FULL_LOGGING = logging.getLogger().getEffectiveLevel() <= logging.DEBUG
+os.makedirs(LOG_DIR, exist_ok=True)
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        base = {
+            "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "lvl": record.levelname,
+            "msg": record.getMessage(),
+            "logger": record.name,
+        }
+        # include any additional attributes on the record (scan_id, url, etc.)
+        for key, value in record.__dict__.items():
+            if key.startswith("_") or key in (
+                "name",
+                "msg",
+                "args",
+                "levelname",
+                "levelno",
+                "pathname",
+                "filename",
+                "module",
+                "exc_info",
+                "exc_text",
+                "stack_info",
+                "lineno",
+                "funcName",
+                "created",
+                "msecs",
+                "relativeCreated",
+                "thread",
+                "threadName",
+                "processName",
+                "process",
+            ):
+                continue
+            base[key] = value
+        if record.exc_info:
+            base["exc"] = self.formatException(record.exc_info)
+        return json.dumps(base, ensure_ascii=False)
+
+
+def setup_logging():
+    root = logging.getLogger()
+    root.setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
+    fh = RotatingFileHandler(
+        os.path.join(LOG_DIR, "malcrawl.log"),
+        maxBytes=LOG_ROTATE_MB * 1024 * 1024,
+        backupCount=LOG_ROTATE_BACKUPS,
+    )
+    formatter = (
+        JsonFormatter()
+        if LOG_JSON
+        else logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
+    )
+    fh.setFormatter(formatter)
+    root.addHandler(fh)
+    if LOG_TO_CONSOLE:
+        ch = logging.StreamHandler()
+        ch.setFormatter(formatter)
+        root.addHandler(ch)
+
+
+setup_logging()
+log = logging.getLogger("malcrawl.app")
 LOG_POSITIONS: dict[str, int] = {}
+FULL_LOGGING = False
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -69,31 +138,20 @@ def new_scan_status(domain: str) -> str:
 @app.before_request
 def log_request():
     """Log basic request information."""
-    log.info(
-        "request",
-        extra={
-            "extra": {
-                "method": request.method,
-                "path": request.path,
-                "remote_addr": request.remote_addr,
-            }
-        },
+    bind(log, url=request.path, method=request.method, remote_addr=request.remote_addr).info(
+        "http.request"
     )
 
 
 @app.after_request
 def log_response(response):
     """Log response details after handling a request."""
-    log.info(
-        "response",
-        extra={
-            "extra": {
-                "method": request.method,
-                "path": request.path,
-                "status": response.status_code,
-            }
-        },
-    )
+    bind(
+        log,
+        url=request.path,
+        method=request.method,
+        status=response.status_code,
+    ).info("http.response")
     return response
 
 
@@ -129,6 +187,23 @@ def scan_log(scan_id):
     return jsonify({"lines": lines})
 
 
+@app.get("/logs/<scan_id>")
+def get_logs(scan_id):
+    path = os.path.join(LOG_DIR, "malcrawl.log")
+    if not os.path.exists(path):
+        return jsonify([])
+    rows = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            try:
+                obj = json.loads(line)
+            except Exception:
+                continue
+            if obj.get("scan_id") == scan_id:
+                rows.append(obj)
+    return jsonify(rows[-500:])
+
+
 @app.get("/api/scans")
 def api_scans():
     auth = require_token()
@@ -162,22 +237,22 @@ def api_scan_results(scan_id):
     return jsonify({"items": rows, "page": page, "limit": limit, "total": total})
 
 
-def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug):
+def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, full_logging):
     """Background thread entry for crawl"""
     reset_state()
     start = datetime.datetime.utcnow()
-    log.info(
-        "scan_thread_start",
+    bind(
+        log,
+        scan_id=scan_id,
+        url=url,
+    ).info(
+        "scan.thread_start",
         extra={
-            "extra": {
-                "scan_id": scan_id,
-                "url": url,
-                "depth": depth,
-                "render_js": render_js,
-                "screenshots": include_shots,
-                "target": target,
-                "debug": debug,
-            }
+            "depth": depth,
+            "render_js": render_js,
+            "screenshots": include_shots,
+            "target": target,
+            "debug": debug,
         },
     )
     try:
@@ -191,6 +266,7 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug):
             include_screenshots=include_shots,
             target_pattern=target,
             debug=debug,
+            full_logging=full_logging,
         )
         if SCAN_STATUS.get(scan_id, {}).get("status") == "running":
             SCAN_STATUS[scan_id]["phase"] = "done"
@@ -226,45 +302,62 @@ def start_scan():
     include_shots = request.form.get("include_shots") == "on"
     target = request.form.get("target_pattern")
     debug = request.form.get("debug_mode") == "on"
-    full_logging = request.form.get("full_logging") == "on"
+    full_logging = request.form.get("full_logging") == "1"
 
     global FULL_LOGGING
     FULL_LOGGING = full_logging
-    logging.getLogger().setLevel(logging.DEBUG if FULL_LOGGING else logging.INFO)
-    log.info("full_logging_toggle", extra={"extra": {"enabled": FULL_LOGGING}})
 
     if not url:
         return jsonify({"error": "URL required"}), 400
 
     domain = urlparse(url).netloc
-    sid = new_scan_status(domain)
-    SCAN_STATUS[sid]["total"] = MAX_PAGES
-    LOG_POSITIONS[sid] = os.path.getsize(os.path.join("logs", "malcrawl.log")) if os.path.exists(os.path.join("logs", "malcrawl.log")) else 0
+    scan_id = new_scan_status(domain)
+    SCAN_STATUS[scan_id]["total"] = MAX_PAGES
+    SCAN_STATUS[scan_id]["full_logging"] = full_logging
 
-    log.info(
-        "scan_start",
+    scan_log = bind(with_ctx("malcrawl.scan"), scan_id=scan_id)
+    if full_logging:
+        logging.getLogger().setLevel(logging.DEBUG)
+        scan_log.info("full_logging enabled for this scan")
+    else:
+        logging.getLogger().setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
+
+    LOG_POSITIONS[scan_id] = (
+        os.path.getsize(os.path.join(LOG_DIR, "malcrawl.log"))
+        if os.path.exists(os.path.join(LOG_DIR, "malcrawl.log"))
+        else 0
+    )
+
+    bind(log, scan_id=scan_id, url=url).info(
+        "scan.start",
         extra={
-            "extra": {
-                "scan_id": sid,
-                "url": url,
-                "depth": depth,
-                "user_agent": ua,
-                "render_js": render_js,
-                "screenshots": include_shots,
-                "target": target,
-                "debug": debug,
-            }
+            "depth": depth,
+            "user_agent": ua,
+            "render_js": render_js,
+            "screenshots": include_shots,
+            "target": target,
+            "debug": debug,
         },
     )
 
     thread = Thread(
         target=run_crawl,
-        args=(sid, url, depth, ua, render_js, include_shots, target, debug),
+        args=(
+            scan_id,
+            url,
+            depth,
+            ua,
+            render_js,
+            include_shots,
+            target,
+            debug,
+            full_logging,
+        ),
     )
     thread.daemon = True
     thread.start()
 
-    return jsonify({"scan_id": sid})
+    return jsonify({"scan_id": scan_id})
 
 @app.route('/screenshots/<filename>')
 def serve_screenshot(filename):
@@ -292,6 +385,11 @@ def recent_scans():
 def signatures_page():
     """Placeholder page for signature management."""
     return render_template("signatures.html", year=datetime.datetime.now().year)
+
+
+@app.get("/logs")
+def view_logs():
+    return render_template("logs.html", year=datetime.datetime.now().year)
 
 
 @app.route("/", methods=["GET"])
@@ -449,6 +547,7 @@ def view_result(result_id):
             result=result,
             domain=domain,
             screenshots=shots,
+            scan_id=request.args.get("scan_id"),
             year=datetime.datetime.now().year,
         )
     else:
