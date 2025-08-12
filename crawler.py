@@ -16,6 +16,7 @@ from config import (
 )
 from scanner import scan_page
 from storage import log_crawl_result
+from logging_utils import with_ctx, bind
 
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
@@ -29,6 +30,8 @@ pages_seen = 0
 scripts_seen = 0
 bytes_html = 0
 start_time = 0.0
+
+log = with_ctx("malcrawl.crawler")
 
 
 def reset_state():
@@ -139,35 +142,38 @@ def crawl(
     include_screenshots=False,
     target_pattern=None,
     debug=False,
+    full_logging=False,
 ):
     global pages_seen, scripts_seen, bytes_html
+    L = bind(log, scan_id=scan_id, url=url)
+    if full_logging:
+        L.debug("crawl.start", extra={"depth": depth, "render_js": render_js})
     if should_cancel(scan_id):
         raise CancelledError()
     if pages_seen >= MAX_PAGES:
-        update_status(scan_id, status="partial", phase="done", errors=["Stopped: page_cap"])
+        update_status(scan_id, status="partial", phase="done", last_event="limit.pages")
         return
     if time.time() - start_time > MAX_RUNTIME_SECS:
-        update_status(scan_id, status="partial", phase="done", errors=["Stopped: time_cap"])
+        update_status(scan_id, status="partial", phase="done", last_event="limit.time")
         return
     if scripts_seen >= MAX_SCRIPTS:
-        update_status(scan_id, status="partial", phase="done", errors=["Stopped: script_cap"])
+        update_status(scan_id, status="partial", phase="done", last_event="limit.scripts")
         return
     if bytes_html >= MAX_BYTES_HTML:
-        update_status(scan_id, status="partial", phase="done", errors=["Stopped: byte_cap"])
+        update_status(scan_id, status="partial", phase="done", last_event="limit.bytes")
         return
     if url in visited or depth == 0:
         return
     visited.add(url)
 
-    update_status(scan_id, phase="fetch", current_url=url)
+    update_status(scan_id, phase="fetch", current_url=url, last_event="fetch.start")
 
     if render_js and browser is None:
         browser = detect_browser()
 
-    log = logging.getLogger("crawler")
-    log.info("fetch_start", extra={"extra": {"scan_id": scan_id, "url": url}})
+    L.info("fetch.start")
 
-    headers = {'User-Agent': user_agent}
+    headers = {"User-Agent": user_agent}
     html = None
 
     try:
@@ -180,33 +186,54 @@ def crawl(
             if html is None:
                 if use_sqlite:
                     log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")
-                update_status(scan_id, status="error", phase="done", errors=["selenium failure"])
+                update_status(scan_id, status="error", phase="done", last_event="fetch.error", last_error="selenium failure")
                 return
         else:
             response = requests.get(url, headers=headers, timeout=TIMEOUT)
             html = response.text
 
         bytes_html += len(html or "")
-        soup = BeautifulSoup(html, 'html.parser')
+        soup = BeautifulSoup(html, "html.parser")
+        L.info(
+            "fetch.done",
+            extra={"status": getattr(response, "status_code", 200), "bytes": len(html or "")},
+        )
     except Exception as e:
         if use_sqlite:
             log_crawl_result(url, 0, 0, 0, [], status=f"error: {e}")
-        update_status(scan_id, status="error", phase="done", errors=[str(e)])
+        update_status(scan_id, status="error", phase="done", last_event="fetch.error", last_error=str(e))
+        L.error("fetch.error", exc_info=True)
         return
 
-    links = [a['href'] for a in soup.find_all('a', href=True)]
-    images = [img['src'] for img in soup.find_all('img', src=True)]
-    videos = [v['src'] for v in soup.find_all('video', src=True)]
-    sources = [s['src'] for s in soup.find_all('source', src=True)]
+    if full_logging:
+        L.debug("parse.start")
+
+    links = [a["href"] for a in soup.find_all("a", href=True)]
+    images = [img["src"] for img in soup.find_all("img", src=True)]
+    videos = [v["src"] for v in soup.find_all("video", src=True)]
+    sources = [s["src"] for s in soup.find_all("source", src=True)]
     total_videos = len(videos) + len(sources)
 
     suspicious, scripts, inline_events, matches = scan_page(
-        soup, url, target_pattern=target_pattern, debug=debug, user_agent=user_agent
+        soup,
+        url,
+        scan_id=scan_id,
+        full_logging=full_logging,
+        target_pattern=target_pattern,
+        debug=debug,
+        user_agent=user_agent,
     )
 
     scripts_seen += len(scripts)
     pages_seen += 1
-    update_status(scan_id, done=pages_seen, phase="scanning", current_url=url)
+    update_status(
+        scan_id,
+        done=pages_seen,
+        phase="scanning",
+        current_url=url,
+        items_crawled=pages_seen,
+        last_event="scan.page",
+    )
 
     if use_sqlite:
         log_crawl_result(
@@ -220,10 +247,19 @@ def crawl(
             status="success",
         )
 
+    L.info(
+        "links.discovered",
+        extra={"links": len(links), "images": len(images), "videos": total_videos},
+    )
+
     for a in links:
         next_url = urljoin(url, a)
         parsed = urlparse(next_url)
-        if parsed.scheme in ('http', 'https'):
+        if parsed.scheme in ("http", "https"):
+            if full_logging:
+                bind(log, scan_id=scan_id, url=next_url).debug(
+                    "enqueue", extra={"remaining_depth": depth - 1}
+                )
             crawl(
                 next_url,
                 scan_id=scan_id,
@@ -235,6 +271,7 @@ def crawl(
                 include_screenshots=include_screenshots,
                 target_pattern=target_pattern,
                 debug=debug,
+                full_logging=full_logging,
             )
             if should_cancel(scan_id):
                 raise CancelledError()

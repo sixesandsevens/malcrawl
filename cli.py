@@ -5,13 +5,19 @@ import datetime
 import io
 import json
 import os
+import uuid
+import logging
 from urllib.parse import urlparse
 
 from bs4 import BeautifulSoup
 
 from crawler import crawl, reset_state
 from scanner import scan_page
-from config import CONFIG, DEFAULT_DEPTH, DEFAULT_USER_AGENT
+from config import CONFIG, DEFAULT_DEPTH, DEFAULT_USER_AGENT, LOG_LEVEL
+from logging_utils import with_ctx, bind
+from app import setup_logging
+
+setup_logging()
 from storage import (
     fetch_results,
     fetch_result,
@@ -51,15 +57,25 @@ def scan_url(args: argparse.Namespace) -> None:
 
     ua = args.user_agent or DEFAULT_USER_AGENT
 
+    scan_id = str(uuid.uuid4())
+    log = bind(with_ctx("malcrawl.cli"), scan_id=scan_id)
+    if args.full_logging:
+        logging.getLogger().setLevel(logging.DEBUG)
+        log.info("Full logging enabled from CLI")
+    else:
+        logging.getLogger().setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
+
     reset_state()
     crawl(
         args.url,
+        scan_id=scan_id,
         depth=DEFAULT_DEPTH,
         use_sqlite=True,
         user_agent=ua,
         render_js=args.render_js,
         target_pattern=None,
         debug=args.verbose,
+        full_logging=args.full_logging,
     )
 
     domain = urlparse(args.url).netloc
@@ -103,7 +119,21 @@ def scan_file(args: argparse.Namespace) -> None:
     with open(args.file, "r", encoding="utf-8") as fh:
         html = fh.read()
     soup = BeautifulSoup(html, "html.parser")
-    suspicious, scripts, inline_events, matches = scan_page(soup, args.file, debug=args.verbose)
+    scan_id = str(uuid.uuid4())
+    log = bind(with_ctx("malcrawl.cli"), scan_id=scan_id, url=args.file)
+    if args.full_logging:
+        logging.getLogger().setLevel(logging.DEBUG)
+        log.info("Full logging enabled from CLI")
+    else:
+        logging.getLogger().setLevel(getattr(logging, LOG_LEVEL.upper(), logging.INFO))
+
+    suspicious, scripts, inline_events, matches = scan_page(
+        soup,
+        args.file,
+        scan_id=scan_id,
+        full_logging=args.full_logging,
+        debug=args.verbose,
+    )
     links = [a.get("href") for a in soup.find_all("a", href=True)]
     images = [i.get("src") for i in soup.find_all("img", src=True)]
     videos = [v.get("src") for v in soup.find_all("video", src=True)] + [s.get("src") for s in soup.find_all("source", src=True)]
@@ -201,6 +231,11 @@ def main() -> None:
     scan.add_argument("--no-clamav", action="store_true", help="Disable ClamAV scanning")
     scan.add_argument("--yara-rules", help="Path to YARA rules directory")
     scan.add_argument("--log", action="store_true", help="Save console output to cli_logs")
+    scan.add_argument(
+        "--full-logging",
+        action="store_true",
+        help="Enable verbose DEBUG logging for this run",
+    )
 
     list_cmd = sub.add_parser("list", help="List previous scans")
     list_cmd.set_defaults(func=command_list)

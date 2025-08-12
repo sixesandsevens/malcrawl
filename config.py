@@ -24,6 +24,14 @@ _DEFAULT_CFG = {
 
 CONFIG_PATH = "config.json"
 
+# Logging
+LOG_DIR = "logs"
+LOG_LEVEL = "INFO"          # DEBUG, INFO, WARNING, ERROR
+LOG_TO_CONSOLE = True
+LOG_JSON = True             # if False, switch to human/pretty logs
+LOG_ROTATE_MB = 10          # per file
+LOG_ROTATE_BACKUPS = 5
+
 def _load_config(path: str) -> dict:
     if os.path.exists(path):
         try:

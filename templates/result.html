@@ -122,9 +122,38 @@
         {% else %}
             <p>No sandbox data.</p>
         {% endif %}
+        {% if scan_id %}
+        <section class="card mt-4">
+          <div class="card-header">
+            <h3>Scan Log</h3>
+            <button id="refresh-log" class="btn btn-sm">Refresh</button>
+          </div>
+          <div id="log-view" class="mono text-xs overflow-auto h-64 bg-neutral-900 text-neutral-100 p-3 rounded"></div>
+        </section>
+        {% endif %}
     {% else %}
         <p>No results to display.</p>
     {% endif %}
         <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Results List</a> | <a href="{{ url_for('index') }}">Home</a></p>
+{% if scan_id %}
+<script>
+const scanId = "{{ scan_id }}";
+async function loadLog() {
+  const res = await fetch(`/logs/${scanId}`);
+  const data = await res.json();
+  const lines = data.map(o => {
+    const ts = o.ts || "";
+    const lvl = o.lvl || "";
+    const msg = o.msg || "";
+    const url = o.url ? ` [${o.url}]` : "";
+    return `${ts} ${lvl} ${msg}${url}`;
+  });
+  document.getElementById("log-view").textContent = lines.join("\n");
+}
+document.getElementById("refresh-log").addEventListener("click", loadLog);
+setInterval(loadLog, 3000);
+loadLog();
+</script>
+{% endif %}
 <script src="/static/js/viewer.js"></script>
 {% endblock %}
