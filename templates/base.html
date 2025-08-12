@@ -109,10 +109,12 @@
                 <div id="scanProgressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
             </div>
             <div class="mt-2">
-                <button class="btn btn-sm btn-secondary" id="toggleLog">Toggle Logs</button>
+                <button class="btn btn-sm btn-secondary" id="toggle-logs">Toggle Logs</button>
                 <button class="btn btn-sm btn-danger" id="btn-cancel">Stop Scan</button>
             </div>
-            <pre id="logConsole" class="bg-dark text-white p-2 mt-2 d-none" style="max-height:200px;overflow-y:auto"></pre>
+            <div id="log-wrapper" class="card mt-2" style="display:none;max-height:260px;overflow:auto">
+              <pre id="log-box" class="mb-0"></pre>
+            </div>
         </div>
         {% block content %}{% endblock %}
     </main>
@@ -126,8 +128,27 @@
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
             const progress = document.getElementById('progressContainer');
-            const log = document.getElementById('logConsole');
-            const toggleBtn = document.getElementById('toggleLog');
+            const logWrap = document.getElementById('log-wrapper');
+            const logBox = document.getElementById('log-box');
+            const toggleBtn = document.getElementById('toggle-logs');
+            let logTimer = null;
+            let lastId = 0;
+
+            async function pullLogs() {
+                try {
+                    const r = await fetch(`/logs/recent?since=${lastId}`);
+                    const j = await r.json();
+                    if (j.items && j.items.length) {
+                        for (const it of j.items) {
+                            logBox.textContent += it.text + '\n';
+                        }
+                        lastId = j.latest || lastId;
+                        logWrap.scrollTop = logWrap.scrollHeight;
+                    }
+                } catch (e) {
+                    console.warn('log poll failed', e);
+                }
+            }
 
             if (form) {
                 form.addEventListener('submit', async e => {
@@ -135,7 +156,7 @@
                     progress.style.display = 'block';
                     const fd = new FormData(form);
                     window.FULL_LOGGING = fd.get('full_logging') === 'on';
-                    log.textContent = '';
+                    logBox.textContent = '';
                     const r = await fetch('/start_scan', { method: 'POST', body: fd });
                     const data = await r.json();
                     window.SCAN_ID = data.scan_id;
@@ -144,7 +165,17 @@
             }
 
             toggleBtn?.addEventListener('click', () => {
-                log.classList.toggle('d-none');
+                if (logTimer) {
+                    clearInterval(logTimer);
+                    logTimer = null;
+                    logWrap.style.display = 'none';
+                } else {
+                    logWrap.style.display = 'block';
+                    lastId = 0;
+                    logBox.textContent = '';
+                    pullLogs();
+                    logTimer = setInterval(pullLogs, 1000);
+                }
             });
 
             const buttons = document.querySelectorAll('.copy-button');

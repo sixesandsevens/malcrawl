@@ -25,7 +25,7 @@ from config import (
     LOG_ROTATE_MB,
     LOG_ROTATE_BACKUPS,
 )
-from logging_utils import with_ctx, bind
+from logging_utils import with_ctx, bind, UIBufferHandler, LOG_BUFFER
 
 app = Flask(__name__)
 
@@ -96,6 +96,37 @@ setup_logging()
 log = logging.getLogger("malcrawl.app")
 LOG_POSITIONS: dict[str, int] = {}
 FULL_LOGGING = False
+
+
+def setup_ui_logging(full_logging: bool):
+    """Attach the UI buffer handler to the malcrawl logger once."""
+    logger = logging.getLogger("malcrawl")
+    if not any(isinstance(h, UIBufferHandler) for h in logger.handlers):
+        logger.addHandler(
+            UIBufferHandler(
+                level=logging.DEBUG if full_logging else logging.INFO
+            )
+        )
+    logger.setLevel(logging.DEBUG if full_logging else logging.INFO)
+    return logger
+
+
+@app.before_first_request
+def _boot_logging():
+    # default to INFO on first run; start_scan can raise to DEBUG if user ticked full logging
+    setup_ui_logging(full_logging=False)
+
+
+@app.get("/logs/recent")
+def logs_recent():
+    """Poll for new log lines since a given ID."""
+    try:
+        since = int(request.args.get("since", "0"))
+    except ValueError:
+        since = 0
+    items = [x for x in list(LOG_BUFFER) if x["id"] > since]
+    latest = items[-1]["id"] if items else since
+    return jsonify({"items": items, "latest": latest})
 
 # Highlight suspicious JavaScript keywords
 BAD_JS_RE = re.compile(r"(eval\(|document\.write|innerHTML)")
@@ -308,6 +339,9 @@ def start_scan():
 
     global FULL_LOGGING
     FULL_LOGGING = full_logging
+
+    logger = setup_ui_logging(full_logging)
+    logger.info("Starting scan for %s (full_logging=%s)", url, full_logging)
 
     if not url:
         return jsonify({"error": "URL required"}), 400
