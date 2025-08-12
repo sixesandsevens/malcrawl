@@ -242,7 +242,7 @@ def api_scan_results(scan_id):
 def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, full_logging):
     """Background thread entry for crawl"""
     reset_state()
-    start = datetime.datetime.utcnow()
+    start = datetime.utcnow()
     bind(
         log,
         scan_id=scan_id,
@@ -281,7 +281,7 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, 
         SCAN_STATUS[scan_id]["status"] = "error"
         SCAN_STATUS[scan_id].setdefault("errors", []).append(str(exc))
     finally:
-        SCAN_STATUS[scan_id]["elapsed"] = (datetime.datetime.utcnow() - start).total_seconds()
+        SCAN_STATUS[scan_id]["elapsed"] = (datetime.utcnow() - start).total_seconds()
         log.info(
             "scan_thread_end",
             extra={
@@ -380,18 +380,18 @@ def recent_scans():
             seen.append(domain)
             domains.append(domain)
     conn.close()
-    return render_template("recent.html", domains=domains, year=datetime.datetime.now().year)
+    return render_template("recent.html", domains=domains, year=datetime.now().year)
 
 
 @app.route("/signatures")
 def signatures_page():
     """Placeholder page for signature management."""
-    return render_template("signatures.html", year=datetime.datetime.now().year)
+    return render_template("signatures.html", year=datetime.now().year)
 
 
 @app.get("/logs")
 def view_logs():
-    return render_template("logs.html", year=datetime.datetime.now().year)
+    return render_template("logs.html", year=datetime.now().year)
 
 
 @app.route("/", methods=["GET"])
@@ -410,7 +410,7 @@ def index():
         user_agents=user_agents,
         output_formats=output_formats,
         full_logging=FULL_LOGGING,
-        year=datetime.datetime.now().year,
+        year=datetime.now().year,
     )
 
 @app.route("/site/<path:domain>")
@@ -447,7 +447,7 @@ def site_results(domain):
         })
 
     conn.close()
-    return render_template("results.html", results=results, domain=domain, year=datetime.datetime.now().year)
+    return render_template("results.html", results=results, domain=domain, year=datetime.now().year)
 
 
 def load_result(result_id):
@@ -550,7 +550,7 @@ def view_result(result_id):
             domain=domain,
             screenshots=shots,
             scan_id=request.args.get("scan_id"),
-            year=datetime.datetime.now().year,
+            year=datetime.now().year,
         )
     else:
         return "Scan not found", 404
