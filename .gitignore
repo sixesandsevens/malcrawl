@@ -7,3 +7,7 @@ venv/
 screenshots/
 malcrawl.zip/
 logs/
+# Logs
+logs/
+*.log
+*.log.*
