@@ -27,6 +27,8 @@ from config import (
 )
 from logging_utils import with_ctx, bind
 
+app = Flask(__name__)
+
 os.makedirs(LOG_DIR, exist_ok=True)
 
 
@@ -120,7 +122,7 @@ def require_token():
 
 
 def new_scan_status(domain: str) -> str:
-    sid = uuid4().hex
+    sid = uuid.uuid4().hex
     SCAN_STATUS[sid] = {
         "scan_id": sid,
         "domain": domain,
