@@ -15,18 +15,25 @@ from signature_scanner import (
     scan_code_yara,
     scan_code_clamav,
 )
+from logging_utils import with_ctx, bind
+
+log = with_ctx("malcrawl.scanner")
 
 load_yara_rules(CONFIG.get("yara_rules_path"))
 
 def scan_page(
     soup,
     base_url,
+    scan_id=None,
+    full_logging=False,
     target_pattern: str | None = None,
     debug: bool = False,
     user_agent: str = DEFAULT_USER_AGENT,
 ) -> Tuple[List[str], List[dict], List[dict], List[Dict]]:
     """Analyze parsed HTML and return suspicious findings, script details and inline events."""
-    print(f"[Scan] {base_url}")
+    L = bind(log, scan_id=scan_id, url=base_url)
+    if full_logging:
+        L.debug("scan.start")
 
     suspicious: List[str] = []
     inline_events: List[dict] = []
@@ -48,30 +55,35 @@ def scan_page(
                 if resp.ok:
                     script_codes.append(resp.text)
                 else:
-                    if debug:
-                        print(f"[Debug] Failed to fetch {src_url}: {resp.status_code}")
+                    if full_logging:
+                        L.debug(
+                            "scripts.fetch_fail", extra={"status": resp.status_code, "url": src_url}
+                        )
             except Exception as e:
-                if debug:
-                    print(f"[Debug] Error fetching {src_url}: {e}")
+                if full_logging:
+                    L.error("scripts.fetch_error", exc_info=True, url=src_url)
         else:
-            if debug:
-                print(f"[Debug] Empty script tag encountered")
+            if full_logging:
+                L.debug("scripts.empty_tag")
     scripts_data: List[dict] = []
     signature_matches: List[Dict] = []
     if script_codes:
         issues, scripts_data = asyncio.run(
-            analyze_scripts(script_codes, target_pattern)
+            analyze_scripts(
+                script_codes,
+                target_pattern,
+                scan_id=scan_id,
+                full_logging=full_logging,
+                source=base_url,
+            )
         )
         suspicious.extend(issues)
         for idx, item in enumerate(scripts_data, 1):
             snippet = item["deobfuscated"]
-            if snippet.strip():
-                preview = snippet.strip().replace("\n", " ")[:80]
-                print(f"    JS Preview: {preview}")
             if item.get("target_hit"):
                 suspicious.append(f"target hit in script: {target_pattern}")
 
-            y_matches = scan_code_yara(snippet)
+            y_matches = scan_code_yara(snippet, scan_id=scan_id, meta={"url": base_url})
             if y_matches:
                 for m in y_matches:
                     signature_matches.append(
@@ -83,7 +95,7 @@ def scan_page(
                             "snippet": (m.get("strings") or [""])[0],
                         }
                     )
-            c_result = scan_code_clamav(snippet)
+            c_result = scan_code_clamav(snippet, scan_id=scan_id)
             if c_result and c_result.get("infected"):
                 signature_matches.append(
                     {
@@ -106,12 +118,15 @@ def scan_page(
         if 'display:none' in str(iframe.get('style', '')):
             suspicious.append("Hidden iframe")
 
+    if inline_events:
+        L.info(
+            "detect.inline_events",
+            extra={"events": [evt["event"] for evt in inline_events]},
+        )
     if suspicious:
-        print(f"  🚨 Suspicious content:")
-        for s in suspicious:
-            print(f"    ⚠️ {s}")
-    else:
-        print(f"  ✅ No major red flags found.")
+        L.info("detect.suspicious_strings", extra={"count": len(suspicious)})
+    if full_logging:
+        L.debug("scripts.external", extra={"count": len(script_codes)})
 
     return suspicious, scripts_data, inline_events, signature_matches
 

@@ -6,6 +6,9 @@ from urllib.parse import unquote
 from typing import List, Tuple
 
 import jsbeautifier
+from logging_utils import with_ctx, bind
+
+log = with_ctx("malcrawl.deob")
 
 """Asynchronous helpers for detecting and unpacking obfuscated JavaScript."""
 
@@ -55,21 +58,33 @@ def _decode_b64(match: re.Match) -> str:
         return match.group(0)
 
 
-def deobfuscate(code: str) -> str:
-    """Attempt to decode common obfuscation patterns."""
-    code = HEX_RE.sub(_decode_hex, code)
-    code = B64_RE.sub(_decode_b64, code)
-    m = EVAL_UNESCAPE_RE.search(code)
-    if m:
-        try:
-            decoded = unquote(m.group(1))
-            code = code.replace(m.group(0), decoded)
-        except Exception:
-            pass
-    m = FUNCTION_RETURN_RE.search(code)
-    if m:
-        code = code.replace(m.group(0), m.group(1))
-    return jsbeautifier.beautify(code)
+def deobfuscate(js_code: str, scan_id=None, source=None, full_logging=False):
+    L = bind(log, scan_id=scan_id, url=source or "inline")
+    try:
+        if full_logging:
+            L.debug("deob.start", extra={"size": len(js_code)})
+        code = HEX_RE.sub(_decode_hex, js_code)
+        code = B64_RE.sub(_decode_b64, code)
+        m = EVAL_UNESCAPE_RE.search(code)
+        if m:
+            try:
+                decoded = unquote(m.group(1))
+                code = code.replace(m.group(0), decoded)
+            except Exception:
+                pass
+        m = FUNCTION_RETURN_RE.search(code)
+        if m:
+            code = code.replace(m.group(0), m.group(1))
+        cleaned = jsbeautifier.beautify(code)
+        intents = infer_intent(cleaned)
+        if intents:
+            L.info("deob.intent", extra={"intent": intents})
+        if full_logging:
+            L.debug("deob.done", extra={"out_len": len(cleaned)})
+        return cleaned, intents
+    except Exception:
+        L.error("deob.error", exc_info=True)
+        return js_code, []
 
 
 def infer_intent(code: str) -> List[str]:
@@ -89,7 +104,7 @@ DYNAMIC_PATTERNS = {
 }
 
 
-async def analyze_script(js_code: str, target: str | None = None) -> Tuple[List[str], str, List[str], bool, bool]:
+async def analyze_script(js_code: str, target: str | None = None, scan_id=None, source=None, full_logging=False) -> Tuple[List[str], str, List[str], bool, bool]:
     """Full pipeline for a single script: detect, deobfuscate, infer intent."""
     findings: List[str] = []
     beautified = js_code
@@ -99,12 +114,13 @@ async def analyze_script(js_code: str, target: str | None = None) -> Tuple[List[
 
     if detect_obfuscation(js_code):
         findings.append("obfuscated JavaScript")
-        deob = deobfuscate(js_code)
+        deob, intents = deobfuscate(js_code, scan_id=scan_id, source=source, full_logging=full_logging)
         if deob != js_code:
             changed = True
         beautified = deob
+    else:
+        intents = infer_intent(beautified)
 
-    intents = infer_intent(beautified)
     for intent in intents:
         findings.append(f"intent:{intent}")
 
@@ -119,9 +135,9 @@ async def analyze_script(js_code: str, target: str | None = None) -> Tuple[List[
     return findings, beautified, intents, changed, target_hit
 
 
-async def analyze_scripts(scripts: List[str], target: str | None = None) -> Tuple[List[str], List[dict]]:
+async def analyze_scripts(scripts: List[str], target: str | None = None, scan_id=None, full_logging=False, source=None) -> Tuple[List[str], List[dict]]:
     """Analyze multiple scripts concurrently."""
-    tasks = [analyze_script(code, target) for code in scripts]
+    tasks = [analyze_script(code, target, scan_id=scan_id, source=source, full_logging=full_logging) for code in scripts]
     results = await asyncio.gather(*tasks)
     findings: List[str] = []
     processed: List[dict] = []

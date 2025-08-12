@@ -69,6 +69,16 @@ without a User-Agent which can cause script fetching to fail.
 ## Optional Sandboxing
 If Node.js is available you can enable lightweight sandbox execution of detected scripts. Behaviour such as network requests or DOM access will be logged alongside other findings.
 
+## Logging
+MalCrawl writes structured JSON logs to `logs/malcrawl.log`. Logging behaviour can be tuned in `config.py`:
+
+- `LOG_LEVEL` – default log level (`INFO`, `DEBUG`, etc.)
+- `LOG_TO_CONSOLE` – echo logs to stdout
+- `LOG_JSON` – disable for human friendly formatting
+- `LOG_ROTATE_MB` / `LOG_ROTATE_BACKUPS` – file rotation controls
+
+Each scan is tagged with a unique correlation ID and can optionally enable verbose debug output. Use the "Enable full logging" toggle in the web UI or pass `--full-logging` on the CLI. Logs may contain full URLs; scrub sensitive data before sharing.
+
 ## Deobfuscation Pipeline
 The scanner analyses each `<script>` block concurrently. Heuristics flag obfuscated code (e.g. `eval`, long variable names or encoded strings). The code is decoded (base64 and hex) and scanned for behaviours such as redirection, credential harvesting or beaconing. A preview of the beautified script is printed to the console along with detected threat types.
 

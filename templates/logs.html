@@ -1,0 +1,28 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2 class="mb-3">Logs</h2>
+<div class="mb-3">
+  <input type="text" id="log-scan-id" class="form-control" placeholder="Scan ID">
+  <button id="load-log" class="btn btn-primary mt-2">Load</button>
+</div>
+<pre id="log-output" class="bg-dark text-light p-2" style="max-height:400px;overflow:auto"></pre>
+<script>
+async function fetchLog(id) {
+  const res = await fetch(`/logs/${id}`);
+  const data = await res.json();
+  return data.map(o => {
+    const ts = o.ts || "";
+    const lvl = o.lvl || "";
+    const msg = o.msg || "";
+    const url = o.url ? ` [${o.url}]` : "";
+    return `${ts} ${lvl} ${msg}${url}`;
+  }).join("\n");
+}
+
+document.getElementById('load-log').addEventListener('click', async () => {
+  const id = document.getElementById('log-scan-id').value.trim();
+  if (!id) return;
+  document.getElementById('log-output').textContent = await fetchLog(id);
+});
+</script>
+{% endblock %}
