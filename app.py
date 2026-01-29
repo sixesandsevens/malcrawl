@@ -350,6 +350,9 @@ def start_scan():
     scan_id = new_scan_status(domain)
     SCAN_STATUS[scan_id]["total"] = MAX_PAGES
     SCAN_STATUS[scan_id]["full_logging"] = full_logging
+    SCAN_STATUS[scan_id]["render_js"] = render_js
+    SCAN_STATUS[scan_id]["include_shots"] = include_shots
+    SCAN_STATUS[scan_id]["depth"] = depth
 
     scan_log = bind(with_ctx("malcrawl.scan"), scan_id=scan_id)
     if full_logging:
@@ -450,6 +453,8 @@ def index():
 @app.route("/site/<path:domain>")
 def site_results(domain):
     """Display stored crawl results for a given domain."""
+    mode = request.args.get("mode")
+    scan_id = request.args.get("scan_id")
     conn = sqlite3.connect("malcrawl.db")
     cur = conn.cursor()
     cur.execute("SELECT * FROM crawl_results WHERE url LIKE ? ORDER BY timestamp DESC", (f"%{domain}%",))
@@ -481,7 +486,14 @@ def site_results(domain):
         })
 
     conn.close()
-    return render_template("results.html", results=results, domain=domain, year=datetime.now().year)
+    return render_template(
+        "results.html",
+        results=results,
+        domain=domain,
+        scan_mode=mode,
+        scan_id=scan_id,
+        year=datetime.now().year,
+    )
 
 
 def load_result(result_id):
@@ -584,6 +596,7 @@ def view_result(result_id):
             domain=domain,
             screenshots=shots,
             scan_id=request.args.get("scan_id"),
+            scan_mode=request.args.get("mode"),
             year=datetime.now().year,
         )
     else:

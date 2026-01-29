@@ -1,4 +1,7 @@
 {% extends 'base.html' %}
+{% block extra_head %}
+  <script defer src="{{ url_for('static', filename='js/mode_ui.js') }}"></script>
+{% endblock %}
 {% block content %}
 <h2 class="mb-4">New Scan</h2>
 <form method="post" class="vstack gap-3">
@@ -24,7 +27,27 @@
   </div>
   <div class="form-check">
     <input class="form-check-input" type="checkbox" name="render_js" id="render_js">
-    <label class="form-check-label" for="render_js">Enable JS Rendering (Selenium)</label>
+    <label class="form-check-label" for="render_js">
+      Active analysis (headless browser executes JavaScript)
+    </label>
+    <div class="form-text text-warning">
+      Executes page JS and loads dynamic resources. Recommended: run in a VM/sandbox.
+    </div>
+  </div>
+  <div id="modeCapabilities" class="border rounded p-3 mt-2">
+    <div class="fw-semibold mb-2">What this scan will do</div>
+    <ul class="mb-0 small" id="capList">
+      <li id="cap_safe_fetch">✅ Fetch HTML using an HTTP client (no JS execution)</li>
+      <li id="cap_fetch_scripts">✅ Download external scripts as text (size-limited)</li>
+      <li id="cap_static_extract">✅ Static extraction (forms/iframes/script tags)</li>
+      <li id="cap_js_exec">❌ JavaScript execution (headless browser)</li>
+      <li id="cap_render_dom">❌ Rendered DOM after JS</li>
+      <li id="cap_screenshot">❌ Screenshot capture</li>
+      <li id="cap_net_capture">❌ Browser network request list</li>
+    </ul>
+    <div class="mt-2 text-secondary small" id="modeNote">
+      Default is SAFE mode. Toggle Active analysis only when you understand the risk.
+    </div>
   </div>
   <div class="form-check">
     <input class="form-check-input" type="checkbox" name="include_shots" id="include_shots">
@@ -48,4 +71,32 @@
   </div>
   <button type="submit" class="btn btn-primary">Run Scan</button>
 </form>
+<div class="modal fade" id="activeModeModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Enable Active Analysis?</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <p class="mb-2">
+          This will open the page in a headless browser and <strong>execute JavaScript</strong>.
+        </p>
+        <ul class="small mb-0">
+          <li>May load additional third-party resources</li>
+          <li>May contact multiple domains</li>
+          <li>Recommended in a VM/sandbox environment</li>
+        </ul>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" id="activeModeCancel" data-bs-dismiss="modal">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-warning" id="activeModeConfirm">
+          Enable Active Analysis
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}

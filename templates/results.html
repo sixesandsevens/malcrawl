@@ -1,6 +1,19 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2 class="mb-4">Scan Results for {{ domain }}</h2>
+{% if scan_mode == 'active' %}
+  <div class="alert alert-warning">
+    <strong>ACTIVE ANALYSIS:</strong> Headless browser executed JavaScript for this run. Recommended to use a VM/sandbox.
+  </div>
+{% elif scan_mode == 'safe' %}
+  <div class="alert alert-success">
+    <strong>SAFE MODE:</strong> No JavaScript execution. Static fetch + analysis only.
+  </div>
+{% else %}
+  <div class="alert alert-secondary">
+    <strong>MODE UNKNOWN:</strong> This view may include results from multiple scans or manual navigation.
+  </div>
+{% endif %}
 
 <ul class="nav nav-tabs mb-3" id="filterTabs">
   <li class="nav-item"><a class="nav-link active" data-filter="all" href="#">All</a></li>
@@ -35,7 +48,7 @@
           {% if r.screenshot %}
             <a href="{{ url_for('serve_screenshot', filename=r.screenshot) }}" download class="btn btn-sm btn-secondary mt-2">Download</a>
           {% endif %}
-          <a href="{{ url_for('view_result', result_id=r.id) }}" class="btn btn-sm btn-primary mt-2">View Details</a>
+          <a href="{{ url_for('view_result', result_id=r.id, scan_id=scan_id, mode=scan_mode) }}" class="btn btn-sm btn-primary mt-2">View Details</a>
           {% if r.status and 'error' in r.status %}
             <p class="text-warning mt-2">{{ r.status }}</p>
           {% endif %}
