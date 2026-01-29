@@ -5,8 +5,21 @@
 {% endblock %}
 {% block content %}
     {% if result %}
-        <a href="{{ url_for('site_results', domain=domain) }}" class="btn btn-secondary mb-3">&larr; Back to Results List</a>
+        <a href="{{ url_for('site_results', domain=domain, scan_id=scan_id, mode=scan_mode) }}" class="btn btn-secondary mb-3">&larr; Back to Results List</a>
         <h2>Scan Results for: {{ result.url }}</h2>
+        {% if scan_mode == 'active' %}
+          <div class="alert alert-warning mt-3">
+            <strong>ACTIVE ANALYSIS:</strong> Headless browser executed JavaScript for this run. Recommended to use a VM/sandbox.
+          </div>
+        {% elif scan_mode == 'safe' %}
+          <div class="alert alert-success mt-3">
+            <strong>SAFE MODE:</strong> No JavaScript execution. Static fetch + analysis only.
+          </div>
+        {% else %}
+          <div class="alert alert-secondary mt-3">
+            <strong>MODE UNKNOWN:</strong> This view may include results from multiple scans or manual navigation.
+          </div>
+        {% endif %}
         <p><strong>Date:</strong> {{ result.timestamp }}</p>
         <p><strong>Links Found:</strong> {{ result.links }}</p>
         <p><strong>Images Found:</strong> {{ result.images }}</p>
@@ -134,7 +147,7 @@
     {% else %}
         <p>No results to display.</p>
     {% endif %}
-        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain) }}">&larr; Back to Results List</a> | <a href="{{ url_for('index') }}">Home</a></p>
+        <p class="mt-4"><a href="{{ url_for('site_results', domain=domain, scan_id=scan_id, mode=scan_mode) }}">&larr; Back to Results List</a> | <a href="{{ url_for('index') }}">Home</a></p>
 {% if scan_id %}
 <script>
 const scanId = "{{ scan_id }}";
