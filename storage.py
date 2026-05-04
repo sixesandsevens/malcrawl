@@ -156,6 +156,11 @@ def fetch_results(domain: str, *, as_dataclass: bool = False) -> list:
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    _ensure_base_tables(cur)
+    _ensure_deob_table(cur)
+    _ensure_signature_table(cur)
+    _ensure_status_column(cur)
+    _ensure_target_hit_column(cur)
     cur.execute(
         "SELECT * FROM crawl_results WHERE url LIKE ? ORDER BY timestamp DESC",
         (f"%{domain}%",),
@@ -250,6 +255,7 @@ def list_scans(page: int = 1, limit: int = 50):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     _ensure_base_tables(cur)
+    _ensure_status_column(cur)
     off = (page - 1) * limit
     cur.execute("SELECT COUNT(*) FROM crawl_results")
     total = cur.fetchone()[0]
@@ -268,6 +274,7 @@ def get_scan(scan_id: int):
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     _ensure_base_tables(cur)
+    _ensure_status_column(cur)
     cur.execute(
         """SELECT id, url as domain, timestamp as started_at, timestamp as finished_at, status
            FROM crawl_results WHERE id=?""",

@@ -179,6 +179,7 @@ def crawl(
 
     headers = {"User-Agent": user_agent}
     html = None
+    status_code = 200
 
     try:
         if render_js:
@@ -199,13 +200,14 @@ def crawl(
                 return
         else:
             response = requests.get(url, headers=headers, timeout=TIMEOUT)
+            status_code = response.status_code
             html = response.text
 
         st.bytes_html += len(html or "")
         soup = BeautifulSoup(html, "html.parser")
         L.info(
             "fetch.done",
-            extra={"status": getattr(response, "status_code", 200), "bytes": len(html or "")},
+            extra={"status": status_code, "bytes": len(html or "")},
         )
     except Exception as e:
         if use_sqlite:

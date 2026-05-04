@@ -1,20 +1,16 @@
+import importlib.util
 import unittest
 
-try:
-    from bs4 import BeautifulSoup  # type: ignore
-except Exception:  # pragma: no cover
-    BeautifulSoup = None
+for module_name in ("bs4", "jsbeautifier", "requests"):
+    if importlib.util.find_spec(module_name) is None:
+        raise unittest.SkipTest(f"Dependency not installed ({module_name})")
 
-try:
-    from scanner import scan_page
-except Exception:  # pragma: no cover
-    scan_page = None
+from bs4 import BeautifulSoup
+from scanner import scan_page
 
 
 class TestStaticScan(unittest.TestCase):
     def test_scan_page_smoke(self):
-        if BeautifulSoup is None or scan_page is None:
-            self.skipTest("Dependencies not installed (beautifulsoup4)")
         with open("tests/mocks/test.html", "r", encoding="utf-8") as fh:
             html = fh.read()
         soup = BeautifulSoup(html, "html.parser")

@@ -322,6 +322,7 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, 
         SCAN_STATUS[scan_id]["status"] = "error"
         SCAN_STATUS[scan_id].setdefault("errors", []).append(str(exc))
     finally:
+        CANCEL_FLAGS.discard(scan_id)
         SCAN_STATUS[scan_id]["elapsed"] = (datetime.utcnow() - start).total_seconds()
         log.info(
             "scan_thread_end",

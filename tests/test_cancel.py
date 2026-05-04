@@ -1,16 +1,15 @@
+import importlib.util
 import unittest
 
-try:
-    from crawler import CancelledError, crawl
-except Exception:  # pragma: no cover
-    CancelledError = None
-    crawl = None
+for module_name in ("bs4", "jsbeautifier", "requests", "selenium"):
+    if importlib.util.find_spec(module_name) is None:
+        raise unittest.SkipTest(f"Dependency not installed ({module_name})")
+
+from crawler import CancelledError, crawl
 
 
 class TestCancel(unittest.TestCase):
     def test_crawl_respects_cancel(self):
-        if CancelledError is None or crawl is None:
-            self.skipTest("Dependencies not installed (beautifulsoup4)")
         def cancel_check(_sid):
             return True
 
