@@ -15,7 +15,7 @@ import contextlib
 from threading import Thread
 
 from crawler import crawl, sanitize_filename, reset_state, CancelledError
-from storage import list_scans, get_scan, get_results_for_scan
+from storage import list_scans, get_scan, get_results_for_scan, fetch_results, fetch_result
 from config import (
     MAX_PAGES,
     LOG_DIR,
@@ -289,6 +289,14 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, 
         },
     )
     try:
+        def cancel_check(_sid):
+            return _sid in CANCEL_FLAGS
+
+        def status_update(_sid, **kw):
+            st = SCAN_STATUS.get(_sid)
+            if st:
+                st.update(kw)
+
         crawl(
             url,
             scan_id=scan_id,
@@ -300,6 +308,8 @@ def run_crawl(scan_id, url, depth, ua, render_js, include_shots, target, debug, 
             target_pattern=target,
             debug=debug,
             full_logging=full_logging,
+            cancel_check=cancel_check,
+            status_update=status_update,
         )
         if SCAN_STATUS.get(scan_id, {}).get("status") == "running":
             SCAN_STATUS[scan_id]["phase"] = "done"
@@ -455,37 +465,7 @@ def site_results(domain):
     """Display stored crawl results for a given domain."""
     mode = request.args.get("mode")
     scan_id = request.args.get("scan_id")
-    conn = sqlite3.connect("malcrawl.db")
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM crawl_results WHERE url LIKE ? ORDER BY timestamp DESC", (f"%{domain}%",))
-    crawl_data = cur.fetchall()
-
-    results = []
-    for row in crawl_data:
-        crawl_id, url, timestamp, links, images, videos, status = row
-        cur.execute(
-            "SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?",
-            (crawl_id,))
-        issues = [r[0] for r in cur.fetchall()]
-
-        # Check if a screenshot was captured for this URL
-        screenshot_name = sanitize_filename(url)
-        screenshot_path = os.path.join("screenshots", screenshot_name)
-        screenshot = screenshot_name if os.path.exists(screenshot_path) else None
-
-        results.append({
-            "id": crawl_id,
-            "url": url,
-            "timestamp": timestamp,
-            "links": links,
-            "images": images,
-            "videos": videos,
-            "issues": issues,
-            "screenshot": screenshot,
-            "status": status,
-        })
-
-    conn.close()
+    results = fetch_results(domain)
     return render_template(
         "results.html",
         results=results,
@@ -497,88 +477,7 @@ def site_results(domain):
 
 
 def load_result(result_id):
-    conn = sqlite3.connect("malcrawl.db")
-    conn.row_factory = sqlite3.Row
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT * FROM crawl_results WHERE id = ?",
-        (result_id,),
-    )
-    row = cur.fetchone()
-    if not row:
-        conn.close()
-        return None
-
-    cur.execute(
-        "SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?",
-        (result_id,),
-    )
-    raw_issues = [r[0] for r in cur.fetchall()]
-    issues = []
-    inline_events = []
-    for i in raw_issues:
-        if i.startswith("Inline JS event:"):
-            m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
-            if m:
-                inline_events.append({"event": m.group(2), "tag": m.group(1)})
-        else:
-            issues.append(i)
-
-    try:
-        cur.execute(
-            "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id = ?",
-            (result_id,),
-        )
-        scripts = []
-        for o, d, i, th in cur.fetchall():
-            if not (o or '').strip() and not (d or '').strip():
-                continue
-            scripts.append({
-                "original": o,
-                "deobfuscated": d,
-                "intent": i,
-                "changed": (d or "").strip() != (o or "").strip(),
-                "target_hit": bool(th),
-            })
-    except sqlite3.OperationalError:
-        scripts = []
-
-    try:
-        cur.execute(
-            "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id = ?",
-            (result_id,),
-        )
-        signatures = [
-            {
-                "script_index": r[0],
-                "tool": r[1],
-                "rule": r[2],
-                "snippet": r[3],
-            }
-            for r in cur.fetchall()
-        ]
-    except sqlite3.OperationalError:
-        signatures = []
-    screenshot_name = sanitize_filename(row["url"])
-    screenshot_path = os.path.join("screenshots", screenshot_name)
-    screenshot = screenshot_name if os.path.exists(screenshot_path) else None
-
-    conn.close()
-
-    return {
-        "id": row["id"],
-        "url": row["url"],
-        "timestamp": row["timestamp"],
-        "links": row["num_links"],
-        "images": row["num_images"],
-        "videos": row["num_videos"],
-        "issues": issues,
-        "inline_events": inline_events,
-        "deobfuscated_scripts": scripts,
-        "signatures": signatures,
-        "screenshot": screenshot,
-        "status": row["status"],
-    }
+    return fetch_result(int(result_id))
 
 
 @app.route("/result/<result_id>")
@@ -606,71 +505,7 @@ def view_result(result_id):
 @app.route("/export/<path:domain>.json")
 def export_json(domain):
     """Export crawl results for a domain as JSON."""
-    conn = sqlite3.connect("malcrawl.db")
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM crawl_results WHERE url LIKE ? ORDER BY timestamp DESC", (f"%{domain}%",))
-    crawl_data = cur.fetchall()
-
-    results = []
-    for row in crawl_data:
-        crawl_id, url, timestamp, links, images, videos, status = row
-        cur.execute("SELECT issue FROM suspicious_findings WHERE crawl_result_id = ?", (crawl_id,))
-        raw_issues = [r[0] for r in cur.fetchall()]
-        issues = []
-        inline_events = []
-        for i in raw_issues:
-            if i.startswith("Inline JS event:"):
-                m = re.search(r"Inline JS event: <([^>]+)> - (\w+)", i)
-                if m:
-                    inline_events.append({"event": m.group(2), "tag": m.group(1)})
-            else:
-                issues.append(i)
-        cur.execute(
-            "SELECT original, deobfuscated, intent, target_hit FROM deobfuscated_scripts WHERE crawl_result_id=?",
-            (crawl_id,),
-        )
-        scripts = []
-        for o, d, i, th in cur.fetchall():
-            scripts.append({
-                "original": o,
-                "deobfuscated": d,
-                "intent": i,
-                "changed": (d or "").strip() != (o or "").strip(),
-                "target_hit": bool(th),
-            })
-        cur.execute(
-            "SELECT script_index, tool, rule, snippet FROM signature_matches WHERE crawl_result_id=?",
-            (crawl_id,),
-        )
-        signatures = [
-            {
-                "script_index": r[0],
-                "tool": r[1],
-                "rule": r[2],
-                "snippet": r[3],
-            }
-            for r in cur.fetchall()
-        ]
-        screenshot_name = sanitize_filename(url)
-        screenshot_path = os.path.join("screenshots", screenshot_name)
-        screenshot = screenshot_name if os.path.exists(screenshot_path) else None
-        results.append({
-            "id": crawl_id,
-            "url": url,
-            "timestamp": timestamp,
-            "links": links,
-            "images": images,
-            "videos": videos,
-            "issues": issues,
-            "inline_events": inline_events,
-            "deobfuscated_scripts": scripts,
-            "signatures": signatures,
-            "screenshot": screenshot,
-            "status": status,
-        })
-
-    conn.close()
-    return jsonify({"domain": domain, "results": results})
+    return jsonify({"domain": domain, "results": fetch_results(domain)})
 
 if __name__ == "__main__":
     app.run(debug=True)

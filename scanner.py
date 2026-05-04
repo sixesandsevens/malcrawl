@@ -4,6 +4,7 @@
 
 import re
 import asyncio
+import threading
 from typing import List, Tuple, Dict
 
 from urllib.parse import urljoin
@@ -20,6 +21,36 @@ from logging_utils import with_ctx, bind
 log = with_ctx("malcrawl.scanner")
 
 load_yara_rules(CONFIG.get("yara_rules_path"))
+
+
+def _run_async(coro):
+    """Run a coroutine from sync code safely.
+
+    - If no loop is running: use asyncio.run()
+    - If we're already inside an active loop: run in a separate thread
+      with its own loop to avoid 'asyncio.run() cannot be called...'.
+    """
+
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+
+    out = {"value": None, "error": None}
+
+    def _worker():
+        try:
+            out["value"] = asyncio.run(coro)
+        except Exception as e:
+            out["error"] = e
+
+    t = threading.Thread(target=_worker, daemon=True)
+    t.start()
+    t.join()
+    if out["error"] is not None:
+        raise out["error"]
+    return out["value"]
+
 
 def scan_page(
     soup,
@@ -68,7 +99,7 @@ def scan_page(
     scripts_data: List[dict] = []
     signature_matches: List[Dict] = []
     if script_codes:
-        issues, scripts_data = asyncio.run(
+        issues, scripts_data = _run_async(
             analyze_scripts(
                 script_codes,
                 target_pattern,
@@ -129,4 +160,3 @@ def scan_page(
         L.debug("scripts.external", extra={"count": len(script_codes)})
 
     return suspicious, scripts_data, inline_events, signature_matches
-

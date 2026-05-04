@@ -151,7 +151,9 @@ def log_crawl_result(
     return crawl_id
 
 
-def fetch_results(domain: str) -> list:
+def fetch_results(domain: str, *, as_dataclass: bool = False) -> list:
+    from result_schema import CrawlResult, InlineEvent, ScriptArtifact, SignatureMatch
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     cur.execute(
@@ -220,7 +222,25 @@ def fetch_results(domain: str) -> list:
             "status": status,
         })
     conn.close()
-    return results
+    if not as_dataclass:
+        return results
+    return [
+        CrawlResult(
+            id=r["id"],
+            url=r["url"],
+            timestamp=r["timestamp"],
+            links=r["links"],
+            images=r["images"],
+            videos=r["videos"],
+            issues=list(r["issues"]),
+            inline_events=[InlineEvent(**e) for e in r["inline_events"]],
+            deobfuscated_scripts=[ScriptArtifact(**s) for s in r["deobfuscated_scripts"]],
+            signatures=[SignatureMatch(**m) for m in r["signatures"]],
+            screenshot=r["screenshot"],
+            status=r["status"],
+        )
+        for r in results
+    ]
 
 # Utility helpers
 
@@ -282,8 +302,10 @@ def get_results_for_scan(scan_id: int, page: int = 1, limit: int = 100):
     return rows, total
 
 
-def fetch_result(result_id: int) -> dict | None:
+def fetch_result(result_id: int, *, as_dataclass: bool = False):
     """Load a single scan result by ID."""
+    from result_schema import CrawlResult, InlineEvent, ScriptArtifact, SignatureMatch
+
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
     _ensure_base_tables(cur)
@@ -338,7 +360,7 @@ def fetch_result(result_id: int) -> dict | None:
     screenshot_path = os.path.join("screenshots", screenshot_name)
     screenshot = screenshot_name if os.path.exists(screenshot_path) else None
     conn.close()
-    return {
+    data = {
         "id": crawl_id,
         "url": url,
         "timestamp": timestamp,
@@ -352,3 +374,19 @@ def fetch_result(result_id: int) -> dict | None:
         "screenshot": screenshot,
         "status": status,
     }
+    if not as_dataclass:
+        return data
+    return CrawlResult(
+        id=data["id"],
+        url=data["url"],
+        timestamp=data["timestamp"],
+        links=data["links"],
+        images=data["images"],
+        videos=data["videos"],
+        issues=list(data["issues"]),
+        inline_events=[InlineEvent(**e) for e in data["inline_events"]],
+        deobfuscated_scripts=[ScriptArtifact(**s) for s in data["deobfuscated_scripts"]],
+        signatures=[SignatureMatch(**m) for m in data["signatures"]],
+        screenshot=data["screenshot"],
+        status=data["status"],
+    )

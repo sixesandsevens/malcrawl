@@ -17,6 +17,7 @@ from config import (
 from scanner import scan_page
 from storage import log_crawl_result
 from logging_utils import with_ctx, bind
+from crawl_session import CrawlSession, CancelCheck, StatusUpdate
 
 from selenium import webdriver
 from selenium.common.exceptions import WebDriverException
@@ -25,39 +26,24 @@ from selenium.webdriver.firefox.service import Service as FirefoxService
 from selenium.webdriver.chrome.options import Options as ChromeOptions
 from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
-visited = set()
-pages_seen = 0
-scripts_seen = 0
-bytes_html = 0
-start_time = 0.0
-
 log = with_ctx("malcrawl.crawler")
 
 
 def reset_state():
-    """Reset counters for a new crawl run."""
-    global visited, pages_seen, scripts_seen, bytes_html, start_time
-    visited = set()
-    pages_seen = 0
-    scripts_seen = 0
-    bytes_html = 0
-    start_time = time.time()
+    """Back-compat no-op: CrawlSession owns state now."""
+    return
 
 
 class CancelledError(Exception):
     """Raised when a scan is cancelled."""
 
 
-def should_cancel(scan_id):
-    from app import CANCEL_FLAGS
-    return scan_id in CANCEL_FLAGS
+def _default_cancel_check(_scan_id):
+    return False
 
 
-def update_status(scan_id, **kw):
-    from app import SCAN_STATUS
-    st = SCAN_STATUS.get(scan_id)
-    if st:
-        st.update(kw)
+def _default_status_update(_scan_id, **_kw):
+    return
 
 def detect_browser():
     if shutil.which("chromedriver"):
@@ -143,30 +129,48 @@ def crawl(
     target_pattern=None,
     debug=False,
     full_logging=False,
+    session: CrawlSession | None = None,
+    cancel_check: CancelCheck | None = None,
+    status_update: StatusUpdate | None = None,
 ):
-    global pages_seen, scripts_seen, bytes_html
-    L = bind(log, scan_id=scan_id, url=url)
+    if session is None:
+        session = CrawlSession(
+            scan_id=scan_id,
+            cancel_check=cancel_check or _default_cancel_check,
+            status_update=status_update or _default_status_update,
+        )
+    else:
+        # ensure scan_id and callbacks remain consistent across recursion
+        session.scan_id = scan_id or session.scan_id
+        if cancel_check is not None:
+            session.cancel_check = cancel_check
+        if status_update is not None:
+            session.status_update = status_update
+
+    st = session.state
+
+    L = bind(log, scan_id=session.scan_id, url=url)
     if full_logging:
         L.debug("crawl.start", extra={"depth": depth, "render_js": render_js})
-    if should_cancel(scan_id):
+    if session.cancelled():
         raise CancelledError()
-    if pages_seen >= MAX_PAGES:
-        update_status(scan_id, status="partial", phase="done", last_event="limit.pages")
+    if st.pages_seen >= MAX_PAGES:
+        session.update(status="partial", phase="done", last_event="limit.pages")
         return
-    if time.time() - start_time > MAX_RUNTIME_SECS:
-        update_status(scan_id, status="partial", phase="done", last_event="limit.time")
+    if time.time() - st.start_time > MAX_RUNTIME_SECS:
+        session.update(status="partial", phase="done", last_event="limit.time")
         return
-    if scripts_seen >= MAX_SCRIPTS:
-        update_status(scan_id, status="partial", phase="done", last_event="limit.scripts")
+    if st.scripts_seen >= MAX_SCRIPTS:
+        session.update(status="partial", phase="done", last_event="limit.scripts")
         return
-    if bytes_html >= MAX_BYTES_HTML:
-        update_status(scan_id, status="partial", phase="done", last_event="limit.bytes")
+    if st.bytes_html >= MAX_BYTES_HTML:
+        session.update(status="partial", phase="done", last_event="limit.bytes")
         return
-    if url in visited or depth == 0:
+    if url in st.visited or depth == 0:
         return
-    visited.add(url)
+    st.visited.add(url)
 
-    update_status(scan_id, phase="fetch", current_url=url, last_event="fetch.start")
+    session.update(phase="fetch", current_url=url, last_event="fetch.start")
 
     if render_js and browser is None:
         browser = detect_browser()
@@ -186,13 +190,18 @@ def crawl(
             if html is None:
                 if use_sqlite:
                     log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")
-                update_status(scan_id, status="error", phase="done", last_event="fetch.error", last_error="selenium failure")
+                session.update(
+                    status="error",
+                    phase="done",
+                    last_event="fetch.error",
+                    last_error="selenium failure",
+                )
                 return
         else:
             response = requests.get(url, headers=headers, timeout=TIMEOUT)
             html = response.text
 
-        bytes_html += len(html or "")
+        st.bytes_html += len(html or "")
         soup = BeautifulSoup(html, "html.parser")
         L.info(
             "fetch.done",
@@ -201,7 +210,12 @@ def crawl(
     except Exception as e:
         if use_sqlite:
             log_crawl_result(url, 0, 0, 0, [], status=f"error: {e}")
-        update_status(scan_id, status="error", phase="done", last_event="fetch.error", last_error=str(e))
+        session.update(
+            status="error",
+            phase="done",
+            last_event="fetch.error",
+            last_error=str(e),
+        )
         L.error("fetch.error", exc_info=True)
         return
 
@@ -217,21 +231,20 @@ def crawl(
     suspicious, scripts, inline_events, matches = scan_page(
         soup,
         url,
-        scan_id=scan_id,
+        scan_id=session.scan_id,
         full_logging=full_logging,
         target_pattern=target_pattern,
         debug=debug,
         user_agent=user_agent,
     )
 
-    scripts_seen += len(scripts)
-    pages_seen += 1
-    update_status(
-        scan_id,
-        done=pages_seen,
+    st.scripts_seen += len(scripts)
+    st.pages_seen += 1
+    session.update(
+        done=st.pages_seen,
         phase="scanning",
         current_url=url,
-        items_crawled=pages_seen,
+        items_crawled=st.pages_seen,
         last_event="scan.page",
     )
 
@@ -257,12 +270,12 @@ def crawl(
         parsed = urlparse(next_url)
         if parsed.scheme in ("http", "https"):
             if full_logging:
-                bind(log, scan_id=scan_id, url=next_url).debug(
+                bind(log, scan_id=session.scan_id, url=next_url).debug(
                     "enqueue", extra={"remaining_depth": depth - 1}
                 )
             crawl(
                 next_url,
-                scan_id=scan_id,
+                scan_id=session.scan_id,
                 depth=depth - 1,
                 use_sqlite=use_sqlite,
                 user_agent=user_agent,
@@ -272,6 +285,7 @@ def crawl(
                 target_pattern=target_pattern,
                 debug=debug,
                 full_logging=full_logging,
+                session=session,
             )
-            if should_cancel(scan_id):
+            if session.cancelled():
                 raise CancelledError()
