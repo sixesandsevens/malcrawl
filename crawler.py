@@ -38,6 +38,7 @@ def _default_cancel_check(_scan_id):
 def _default_status_update(_scan_id, **_kw):
     return
 
+
 def detect_browser():
     if shutil.which("chromedriver"):
         if shutil.which("google-chrome") or shutil.which("google-chrome-stable"):
@@ -50,11 +51,18 @@ def detect_browser():
     elif shutil.which("geckodriver"):
         return "firefox"
     else:
-        raise RuntimeError("No supported browser found (install Chromium/Chrome with a compatible driver, or geckodriver)")
+        raise RuntimeError(
+            "No supported browser found (install Chromium/Chrome with a compatible driver, or geckodriver)"
+        )
 
+def get_driver(browser="firefox", user_agent=None):
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service as ChromeService
+    from selenium.webdriver.firefox.service import Service as FirefoxService
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+    from selenium.webdriver.firefox.options import Options as FirefoxOptions
 
-def get_driver(browser="firefox"):
-    if browser == "chrome" and shutil.which("chromedriver"):
+    if browser == "chrome":
         options = ChromeOptions()
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
@@ -63,7 +71,10 @@ def get_driver(browser="firefox"):
         options.add_argument("--window-size=1920,1080")
         if user_agent:
             options.add_argument(f"--user-agent={user_agent}")
-        return webdriver.Chrome(service=ChromeService(shutil.which("chromedriver")), options=options)
+        driver_path = shutil.which("chromedriver")
+        if driver_path:
+            return webdriver.Chrome(service=ChromeService(driver_path), options=options)
+        return webdriver.Chrome(options=options)
 
     elif browser == "chromium" and (shutil.which("chromium") or shutil.which("chromium-browser")):
         binary = shutil.which("chromium") or shutil.which("chromium-browser")
@@ -81,14 +92,18 @@ def get_driver(browser="firefox"):
             return webdriver.Chrome(service=ChromeService(driver_path), options=options)
         return webdriver.Chrome(options=options)
 
-    elif browser == "firefox" and shutil.which("geckodriver"):
+    elif browser == "firefox":
         options = FirefoxOptions()
         options.add_argument("--headless")
         if user_agent:
             options.set_preference("general.useragent.override", user_agent)
-        return webdriver.Firefox(service=FirefoxService(shutil.which("geckodriver")), options=options)
+        driver_path = shutil.which("geckodriver")
+        if driver_path:
+            return webdriver.Firefox(service=FirefoxService(driver_path), options=options)
+        return webdriver.Firefox(options=options)
 
     raise RuntimeError("No compatible WebDriver found for the selected browser")
+
 
 def fetch_with_selenium(url, screenshot_path=None, browser="firefox", user_agent=None):
     """Fetch a page using Selenium with a bounded load time.
@@ -122,10 +137,12 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox", user_agent
             driver.quit()
             print("[Selenium] Driver closed")
 
+
 def sanitize_filename(url):
     parsed = urlparse(url)
     filename = f"{parsed.netloc}{parsed.path}".replace("/", "_").strip("_")
     return filename + ".png" if filename else "index.png"
+
 
 def crawl(
     url,
