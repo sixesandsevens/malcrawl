@@ -88,6 +88,19 @@ def _ensure_signature_table(cur):
     )
 
 
+def init_db():
+    """Ensure all SQLite tables and lightweight migrations are present."""
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    _ensure_base_tables(cur)
+    _ensure_status_column(cur)
+    _ensure_deob_table(cur)
+    _ensure_target_hit_column(cur)
+    _ensure_signature_table(cur)
+    conn.commit()
+    conn.close()
+
+
 def log_crawl_result(
     url,
     num_links,
@@ -267,6 +280,26 @@ def list_scans(page: int = 1, limit: int = 50):
     items = [dict(zip([c[0] for c in cur.description], row)) for row in cur.fetchall()]
     conn.close()
     return items, total
+
+
+def list_recent_domains(limit: int = 50):
+    """Return unique domains from the most recent crawl results."""
+    init_db()
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT url FROM crawl_results ORDER BY timestamp DESC LIMIT ?",
+        (limit,),
+    )
+    seen = set()
+    domains = []
+    for (url,) in cur.fetchall():
+        domain = urlparse(url).netloc
+        if domain and domain not in seen:
+            seen.add(domain)
+            domains.append(domain)
+    conn.close()
+    return domains
 
 
 def get_scan(scan_id: int):

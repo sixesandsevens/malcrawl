@@ -57,6 +57,11 @@
   </div>
 {% endfor %}
 </div>
+{% if not results %}
+  <div class="alert alert-secondary">
+    No crawl results were saved for this domain yet. If the scan just failed, return to the scanner and check the progress error or logs.
+  </div>
+{% endif %}
 
 <p class="mt-4"><a href="{{ url_for('index') }}">Back to Scanner</a></p>
 <p><a href="{{ url_for('export_json', domain=domain) }}">Download JSON</a></p>

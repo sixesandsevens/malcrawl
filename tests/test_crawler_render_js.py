@@ -22,3 +22,22 @@ class TestCrawlerRenderJs(unittest.TestCase):
                 browser="firefox",
                 use_sqlite=False,
             )
+
+    def test_render_js_browser_detection_error_updates_status(self):
+        status = {}
+
+        def status_update(_scan_id, **kw):
+            status.update(kw)
+
+        with patch("crawler.detect_browser", side_effect=RuntimeError("No supported WebDriver found")):
+            crawl(
+                "https://example.test/",
+                scan_id="render-js-test",
+                depth=1,
+                render_js=True,
+                use_sqlite=False,
+                status_update=status_update,
+            )
+
+        self.assertEqual(status["status"], "error")
+        self.assertIn("No supported WebDriver found", status["last_error"])
