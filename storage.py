@@ -293,6 +293,7 @@ def get_results_for_scan(scan_id: int, page: int = 1, limit: int = 100):
     """Return suspicious findings for a scan."""
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
+    _ensure_base_tables(cur)
     off = (page - 1) * limit
     cur.execute(
         "SELECT COUNT(*) FROM suspicious_findings WHERE crawl_result_id=?",

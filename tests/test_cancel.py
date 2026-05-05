@@ -1,7 +1,7 @@
 import importlib.util
 import unittest
 
-for module_name in ("bs4", "jsbeautifier", "requests", "selenium"):
+for module_name in ("bs4", "jsbeautifier", "requests"):
     if importlib.util.find_spec(module_name) is None:
         raise unittest.SkipTest(f"Dependency not installed ({module_name})")
 

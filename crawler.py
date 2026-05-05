@@ -19,13 +19,6 @@ from storage import log_crawl_result
 from logging_utils import with_ctx, bind
 from crawl_session import CrawlSession, CancelCheck, StatusUpdate
 
-from selenium import webdriver
-from selenium.common.exceptions import WebDriverException
-from selenium.webdriver.chrome.service import Service as ChromeService
-from selenium.webdriver.firefox.service import Service as FirefoxService
-from selenium.webdriver.chrome.options import Options as ChromeOptions
-from selenium.webdriver.firefox.options import Options as FirefoxOptions
-
 log = with_ctx("malcrawl.crawler")
 
 
@@ -56,6 +49,12 @@ def detect_browser():
         raise RuntimeError("No supported WebDriver found (install geckodriver, chromedriver, or chromium-browser)")
 
 def get_driver(browser="firefox"):
+    from selenium import webdriver
+    from selenium.webdriver.chrome.service import Service as ChromeService
+    from selenium.webdriver.firefox.service import Service as FirefoxService
+    from selenium.webdriver.chrome.options import Options as ChromeOptions
+    from selenium.webdriver.firefox.options import Options as FirefoxOptions
+
     if browser == "chrome" and shutil.which("chromedriver"):
         options = ChromeOptions()
         options.add_argument("--headless")
@@ -90,6 +89,8 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
     driver is always quit in a finally block. Optionally capture a screenshot
     when ``screenshot_path`` is provided.
     """
+
+    from selenium.common.exceptions import WebDriverException
 
     driver = None
     try:
