@@ -1,4 +1,4 @@
-flask
+flask>=3
 requests
 beautifulsoup4
 selenium

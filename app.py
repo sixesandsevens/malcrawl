@@ -111,10 +111,12 @@ def setup_ui_logging(full_logging: bool):
     return logger
 
 
-@app.before_first_request
-def _boot_logging():
-    # default to INFO on first run; start_scan can raise to DEBUG if user ticked full logging
+def initialize_app():
+    """Run startup initialization that must happen before serving requests."""
     setup_ui_logging(full_logging=False)
+
+
+initialize_app()
 
 
 @app.get("/logs/recent")
