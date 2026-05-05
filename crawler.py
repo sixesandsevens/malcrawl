@@ -40,21 +40,20 @@ def _default_status_update(_scan_id, **_kw):
 
 def detect_browser():
     if shutil.which("chromedriver"):
+        if shutil.which("google-chrome") or shutil.which("google-chrome-stable"):
+            return "chrome"
+        if shutil.which("chromium") or shutil.which("chromium-browser"):
+            return "chromium"
         return "chrome"
-    elif shutil.which("chromium-browser"):
+    elif shutil.which("chromium") or shutil.which("chromium-browser"):
         return "chromium"
     elif shutil.which("geckodriver"):
         return "firefox"
     else:
-        raise RuntimeError("No supported WebDriver found (install geckodriver, chromedriver, or chromium-browser)")
+        raise RuntimeError("No supported browser found (install Chromium/Chrome with a compatible driver, or geckodriver)")
+
 
 def get_driver(browser="firefox"):
-    from selenium import webdriver
-    from selenium.webdriver.chrome.service import Service as ChromeService
-    from selenium.webdriver.firefox.service import Service as FirefoxService
-    from selenium.webdriver.chrome.options import Options as ChromeOptions
-    from selenium.webdriver.firefox.options import Options as FirefoxOptions
-
     if browser == "chrome" and shutil.which("chromedriver"):
         options = ChromeOptions()
         options.add_argument("--headless")
@@ -62,26 +61,36 @@ def get_driver(browser="firefox"):
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
+        if user_agent:
+            options.add_argument(f"--user-agent={user_agent}")
         return webdriver.Chrome(service=ChromeService(shutil.which("chromedriver")), options=options)
 
-    elif browser == "chromium" and shutil.which("chromium-browser"):
+    elif browser == "chromium" and (shutil.which("chromium") or shutil.which("chromium-browser")):
+        binary = shutil.which("chromium") or shutil.which("chromium-browser")
         options = ChromeOptions()
-        options.binary_location = shutil.which("chromium-browser")
+        options.binary_location = binary
         options.add_argument("--headless")
         options.add_argument("--no-sandbox")
         options.add_argument("--disable-dev-shm-usage")
         options.add_argument("--disable-gpu")
         options.add_argument("--window-size=1920,1080")
-        return webdriver.Chrome(service=ChromeService(shutil.which("chromedriver")), options=options)
+        if user_agent:
+            options.add_argument(f"--user-agent={user_agent}")
+        driver_path = shutil.which("chromedriver")
+        if driver_path:
+            return webdriver.Chrome(service=ChromeService(driver_path), options=options)
+        return webdriver.Chrome(options=options)
 
     elif browser == "firefox" and shutil.which("geckodriver"):
         options = FirefoxOptions()
         options.add_argument("--headless")
+        if user_agent:
+            options.set_preference("general.useragent.override", user_agent)
         return webdriver.Firefox(service=FirefoxService(shutil.which("geckodriver")), options=options)
 
     raise RuntimeError("No compatible WebDriver found for the selected browser")
 
-def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
+def fetch_with_selenium(url, screenshot_path=None, browser="firefox", user_agent=None):
     """Fetch a page using Selenium with a bounded load time.
 
     Selenium's driver.get() can hang indefinitely if a page never finishes
@@ -95,7 +104,7 @@ def fetch_with_selenium(url, screenshot_path=None, browser="firefox"):
     driver = None
     try:
         print(f"[Selenium] Launching {browser} driver for {url}")
-        driver = get_driver(browser)
+        driver = get_driver(browser, user_agent=user_agent)
         driver.set_page_load_timeout(TIMEOUT)
         driver.get(url)
 
@@ -173,9 +182,6 @@ def crawl(
 
     session.update(phase="fetch", current_url=url, last_event="fetch.start")
 
-    if render_js and browser is None:
-        browser = detect_browser()
-
     L.info("fetch.start")
 
     headers = {"User-Agent": user_agent}
@@ -184,11 +190,18 @@ def crawl(
 
     try:
         if render_js:
+            if browser is None:
+                browser = detect_browser()
             screenshot_path = None
             if include_screenshots:
                 screenshot_name = sanitize_filename(url)
                 screenshot_path = os.path.join("screenshots", screenshot_name)
-            html = fetch_with_selenium(url, screenshot_path, browser=browser)
+            html = fetch_with_selenium(
+                url,
+                screenshot_path,
+                browser=browser,
+                user_agent=user_agent,
+            )
             if html is None:
                 if use_sqlite:
                     log_crawl_result(url, 0, 0, 0, [], status="error: selenium failure")

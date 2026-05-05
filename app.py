@@ -4,7 +4,6 @@ from flask import send_from_directory
 from flask import Flask, render_template, request, url_for, jsonify
 from markupsafe import Markup, escape
 import re
-import sqlite3
 from urllib.parse import urlparse
 import os, logging, json, uuid
 from logging.handlers import RotatingFileHandler
@@ -15,7 +14,15 @@ import contextlib
 from threading import Thread
 
 from crawler import crawl, sanitize_filename, reset_state, CancelledError
-from storage import list_scans, get_scan, get_results_for_scan, fetch_results, fetch_result
+from storage import (
+    fetch_result,
+    fetch_results,
+    get_results_for_scan,
+    get_scan,
+    init_db,
+    list_recent_domains,
+    list_scans,
+)
 from config import (
     MAX_PAGES,
     LOG_DIR,
@@ -114,6 +121,7 @@ def setup_ui_logging(full_logging: bool):
 def initialize_app():
     """Run startup initialization that must happen before serving requests."""
     setup_ui_logging(full_logging=False)
+    init_db()
 
 
 initialize_app()
@@ -419,17 +427,7 @@ def serve_screenshot(filename):
 @app.route("/recent")
 def recent_scans():
     """List domains from the most recent crawl results."""
-    conn = sqlite3.connect("malcrawl.db")
-    cur = conn.cursor()
-    cur.execute("SELECT url FROM crawl_results ORDER BY timestamp DESC LIMIT 50")
-    seen = []
-    domains = []
-    for (url,) in cur.fetchall():
-        domain = urlparse(url).netloc
-        if domain not in seen:
-            seen.append(domain)
-            domains.append(domain)
-    conn.close()
+    domains = list_recent_domains()
     return render_template("recent.html", domains=domains, year=datetime.now().year)
 
 
@@ -449,6 +447,7 @@ def index():
     """Render the main form."""
     user_agents = [
         "MalCrawlBot/0.1",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/124.0.0.0 Chrome/124.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/113.0.0.0",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/537.36",
         "curl/7.68.0"

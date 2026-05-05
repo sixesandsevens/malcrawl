@@ -7,6 +7,7 @@ async function pollStatus(scanId){
   const totalSpan = document.getElementById('totalPages');
   const stageSpan = document.getElementById('stage');
   const modeBanner = document.getElementById('scanModeBanner');
+  const errorBox = document.getElementById('scanError');
   if(urlSpan) urlSpan.textContent = s.current_url || '';
   if(pageSpan) pageSpan.textContent = s.done;
   if(totalSpan) totalSpan.textContent = s.total;
@@ -22,11 +23,30 @@ async function pollStatus(scanId){
       modeBanner.innerHTML = '<strong>SAFE MODE:</strong> Static fetch only (no JavaScript execution).';
     }
   }
-  if (s.status === 'completed' || s.status === 'cancelled' || s.status === 'error' || s.status === 'partial') {
+  if (s.status === 'completed' || s.status === 'partial') {
     if (s.domain) {
       const mode = s.render_js ? 'active' : 'safe';
       window.location.href = `/site/${s.domain}?scan_id=${encodeURIComponent(scanId)}&mode=${mode}`;
     }
+  } else if (s.status === 'error') {
+    const message = s.last_error || (s.errors && s.errors.length ? s.errors[s.errors.length - 1] : 'Scan failed.');
+    if (errorBox) {
+      errorBox.style.display = 'block';
+      errorBox.textContent = message;
+    }
+    if (bar) {
+      bar.classList.remove('progress-bar-animated');
+      bar.classList.add('bg-danger');
+    }
+    if (stageSpan) stageSpan.textContent = 'error';
+  } else if (s.status === 'cancelled') {
+    if (errorBox) {
+      errorBox.style.display = 'block';
+      errorBox.className = 'alert alert-secondary mt-2';
+      errorBox.textContent = 'Scan cancelled.';
+    }
+    if (bar) bar.classList.remove('progress-bar-animated');
+    if (stageSpan) stageSpan.textContent = 'cancelled';
   } else {
     setTimeout(()=>pollStatus(scanId), 1000);
   }
